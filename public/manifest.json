@@ -1,0 +1,16 @@
+{
+  "short_name": "ClassroomLM",
+  "name": "ClassroomLM - Interactive 2D AI Classroom",
+  "icons": [
+    {
+      "src": "/logo512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#050B14",
+  "theme_color": "#2563EB",
+  "display": "standalone"
+}

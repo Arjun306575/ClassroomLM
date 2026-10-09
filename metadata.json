@@ -1,0 +1,6 @@
+{
+  "name": "ClassroomLM",
+  "description": "An interactive, AI-powered virtual classroom that transforms study materials into animated lessons with an AI teacher avatar, digital whiteboard, real-time doubt resolution, and gamified quizzes.",
+  "requestFramePermissions": ["microphone", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

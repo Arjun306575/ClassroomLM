@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account document containing authentication info, class preferences, and credit quota.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Firebase Auth UID matching document ID",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User avatar photo URL",
+          "maxLength": 1024
+        },
+        "credits": {
+          "type": "integer",
+          "description": "Remaining AI generation credits (max 100 daily quota)"
+        },
+        "lastResetDate": {
+          "type": "string",
+          "description": "Date of last daily credit quota reset (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "classLevel": {
+          "type": "string",
+          "description": "Selected grade or class level",
+          "maxLength": 30
+        },
+        "language": {
+          "type": "string",
+          "description": "Selected learning language",
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp or string",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update ISO timestamp or string",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "credits", "lastResetDate"]
+    },
+    "SavedItem": {
+      "title": "Saved Educational Item",
+      "description": "Saved lesson, AI search solution, or Magic Lens visual capture.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the saved item",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner UID",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Title or topic of the saved educational item",
+          "maxLength": 300
+        },
+        "description": {
+          "type": "string",
+          "description": "Summary or category description",
+          "maxLength": 500
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of item: lesson, magic_lens, or ai_search",
+          "enum": ["lesson", "magic_lens", "ai_search"]
+        },
+        "data": {
+          "type": "object",
+          "description": "Payload data for lesson, image analysis, or search result"
+        },
+        "config": {
+          "type": "object",
+          "description": "Configuration metadata (persona, focus, classLevel, language)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when saved",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "userId", "title", "type"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile, settings, and daily credit balance."
+    },
+    "/users/{userId}/savedItems/{itemId}": {
+      "schema": "SavedItem",
+      "description": "Subcollection of saved lessons, visual scans, and searches for the user."
+    }
+  }
+}
