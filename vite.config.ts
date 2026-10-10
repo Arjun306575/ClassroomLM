@@ -53,6 +53,20 @@ export default {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    define: {
+      'import.meta.env.VITE_RECAPTCHA_SITE_KEY': JSON.stringify(
+        env.VITE_RECAPTCHA_SITE_KEY ||
+        process.env.VITE_RECAPTCHA_SITE_KEY ||
+        env.RECAPTCHA_SITE_KEY ||
+        process.env.RECAPTCHA_SITE_KEY ||
+        '6LcrWegtAAAAAC3Ohznus0rIJxS3MKbKX-amzAWY'
+      ),
+      'import.meta.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY': JSON.stringify(
+        env.VITE_FIREBASE_RECAPTCHA_SITE_KEY ||
+        process.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY ||
+        '6LcrWegtAAAAAC3Ohznus0rIJxS3MKbKX-amzAWY'
+      ),
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.

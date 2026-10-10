@@ -18,7 +18,7 @@ import { RadialMenu } from './RadialMenu';
 import { SmartCalculator } from './SmartCalculator';
 import { useAuth, CREDIT_COSTS, DAILY_CREDITS_QUOTA } from '../firebase/authContext';
 import { AuthModal } from '../components/AuthModal';
-import { executeRecaptcha } from '../firebase/recaptcha';
+import { executeRecaptcha, loadRecaptchaScript } from '../firebase/recaptcha';
 
 interface LandingPageProps {
   onGenerate: (config: any) => void;
@@ -58,6 +58,13 @@ export function LandingPage({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSavedDrawerOpen, setIsSavedDrawerOpen] = useState(false);
   const [savedFilter, setSavedFilter] = useState<'all' | 'lessons' | 'magic' | 'search'>('all');
+
+  useEffect(() => {
+    console.log('reCAPTCHA initialized:', import.meta.env.VITE_RECAPTCHA_SITE_KEY);
+    loadRecaptchaScript().catch((err) => {
+      console.warn('[reCAPTCHA] Init notice:', err);
+    });
+  }, []);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchState, setSearchState] = useState<'idle' | 'generating' | 'result'>('idle');

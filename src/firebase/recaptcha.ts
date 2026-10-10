@@ -39,6 +39,8 @@ let scriptLoadingPromise: Promise<boolean> | null = null;
 export const loadRecaptchaScript = (): Promise<boolean> => {
   if (typeof window === 'undefined') return Promise.resolve(false);
 
+  console.log('reCAPTCHA initialized:', import.meta.env.VITE_RECAPTCHA_SITE_KEY);
+
   const siteKey = getRecaptchaSiteKey();
   if (!siteKey) {
     console.warn('[reCAPTCHA] No site key found in environment variables (VITE_RECAPTCHA_SITE_KEY / RECAPTCHA_SITE_KEY)');

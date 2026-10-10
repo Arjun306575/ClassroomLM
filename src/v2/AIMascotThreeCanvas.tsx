@@ -104,64 +104,6 @@ function createRoundVisorGeometry(
   return geom;
 }
 
-/**
- * Creates a precision rounded metallic bezel ring that circles the perimeter
- * of the round face screen, locking it naturally into the ceramic helmet shell.
- */
-function createRoundBezelGeometry(
-  rx: number,
-  ry: number,
-  tubeRadius: number,
-  offsetZ: number,
-  radialSegs = 12,
-  tubularSegs = 48
-): THREE.BufferGeometry {
-  const geom = new THREE.BufferGeometry();
-  const positions: number[] = [];
-  const indices: number[] = [];
-
-  for (let t = 0; t <= tubularSegs; t++) {
-    const angle = (t / tubularSegs) * Math.PI * 2;
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
-
-    const cx = cosA * rx;
-    const cy = sinA * ry;
-    const radicand = Math.max(0, 0.66 * 0.66 - (cx / 1.16) * (cx / 1.16) - (cy / 1.05) * (cy / 1.05));
-    const cz = 1.02 * Math.sqrt(radicand) + offsetZ;
-
-    for (let r = 0; r <= radialSegs; r++) {
-      const phi = (r / radialSegs) * Math.PI * 2;
-      const nx = cosA;
-      const ny = sinA;
-
-      const px = cx + Math.cos(phi) * tubeRadius * nx;
-      const py = cy + Math.cos(phi) * tubeRadius * ny;
-      const pz = cz + Math.sin(phi) * tubeRadius;
-
-      positions.push(px, py, pz);
-    }
-  }
-
-  for (let t = 0; t < tubularSegs; t++) {
-    for (let r = 0; r < radialSegs; r++) {
-      const p1 = t * (radialSegs + 1) + r;
-      const p2 = (t + 1) * (radialSegs + 1) + r;
-      const p3 = (t + 1) * (radialSegs + 1) + (r + 1);
-      const p4 = t * (radialSegs + 1) + (r + 1);
-
-      indices.push(p1, p2, p4);
-      indices.push(p2, p3, p4);
-    }
-  }
-
-  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geom.setIndex(indices);
-  geom.computeVertexNormals();
-
-  return geom;
-}
-
 export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMascotThreeCanvasProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [, setIsInteracting] = useState(false);
@@ -216,39 +158,39 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     // 2. High-Grade Materials with Pearlescent Sheen
     // -------------------------------------------------------------------------
     const glossyWhiteMat = new THREE.MeshPhysicalMaterial({
-      color: 0xfafafa,
-      roughness: 0.12,
-      metalness: 0.04,
+      color: 0xfcfcfd,
+      roughness: 0.14,
+      metalness: 0.02,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.06,
+      clearcoatRoughness: 0.08,
       reflectivity: 0.9,
-      sheen: 0.35,
+      sheen: 0.25,
       sheenRoughness: 0.25,
       sheenColor: new THREE.Color(0xa5f3fc),
     });
 
     const silverMetalMat = new THREE.MeshStandardMaterial({
-      color: 0x94a3b8,
-      metalness: 0.85,
-      roughness: 0.2,
+      color: 0xdbeafe,
+      metalness: 0.28,
+      roughness: 0.22,
     });
 
     const darkJointMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.3,
-      metalness: 0.88,
-    });
-
-    const glossyCapMat = new THREE.MeshStandardMaterial({
-      color: 0x1d4ed8,
+      color: 0x64748b,
       roughness: 0.28,
       metalness: 0.22,
     });
 
+    const glossyCapMat = new THREE.MeshStandardMaterial({
+      color: 0x1d4ed8,
+      roughness: 0.26,
+      metalness: 0.20,
+    });
+
     const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      metalness: 0.92,
-      roughness: 0.16,
+      color: 0xfbbf24,
+      metalness: 0.35,
+      roughness: 0.20,
     });
 
     const purpleTasselMat = new THREE.MeshStandardMaterial({
@@ -276,24 +218,9 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     type ExpressionType = 'normal' | 'blink' | 'celebrate';
 
     const drawFaceScreen = (expression: ExpressionType = 'normal') => {
-      faceCtx.clearRect(0, 0, 512, 512);
-
-      // Deep obsidian OLED black circular background
-      faceCtx.fillStyle = '#050814';
-      faceCtx.beginPath();
-      faceCtx.arc(256, 256, 254, 0, Math.PI * 2);
-      faceCtx.fill();
-
-      // Subtle horizontal OLED micro-scanlines
-      faceCtx.save();
-      faceCtx.beginPath();
-      faceCtx.arc(256, 256, 250, 0, Math.PI * 2);
-      faceCtx.clip();
-      faceCtx.fillStyle = 'rgba(0, 240, 255, 0.024)';
-      for (let y = 0; y < 512; y += 6) {
-        faceCtx.fillRect(0, y, 512, 2);
-      }
-      faceCtx.restore();
+      // Solid deep obsidian OLED background filling 100% of the canvas surface (prevents blank/dark corner gaps)
+      faceCtx.fillStyle = '#060a17';
+      faceCtx.fillRect(0, 0, 512, 512);
 
       // Curved glass reflection highlight in upper-left
       const glassGrad = faceCtx.createLinearGradient(90, 70, 260, 240);
@@ -407,15 +334,6 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       faceCtx.moveTo(218, 315);
       faceCtx.quadraticCurveTo(256, 356, 294, 315);
       faceCtx.stroke();
-
-      // Dimple marks
-      faceCtx.lineWidth = 7;
-      faceCtx.beginPath();
-      faceCtx.moveTo(217, 316);
-      faceCtx.lineTo(213, 309);
-      faceCtx.moveTo(295, 316);
-      faceCtx.lineTo(299, 309);
-      faceCtx.stroke();
     };
 
     // Draw initial static face once (no per-frame redraws!)
@@ -454,11 +372,11 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, 512, 512);
 
-      // Contrast-boosting vignette
+      // Subtle soft ambient vignette
       const radGrad = ctx.createRadialGradient(256, 256, 100, 256, 256, 340);
       radGrad.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
-      radGrad.addColorStop(0.65, 'rgba(0, 0, 0, 0)');
-      radGrad.addColorStop(1, 'rgba(0, 0, 0, 0.48)');
+      radGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0)');
+      radGrad.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
       ctx.fillStyle = radGrad;
       ctx.fillRect(0, 0, 512, 512);
 
@@ -756,42 +674,37 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     helmetMesh.castShadow = true;
     headGroup.add(helmetMesh);
 
-    // 2. ROUND OLED VISOR SCREEN
-    const roundVisorGeom = createRoundVisorGeometry(0.44, 0.40, 0.009, 24, 48);
+    // 2. ROUND OLED VISOR SCREEN (Clean forward offset prevents Z-fighting and black gaps)
+    const roundVisorGeom = createRoundVisorGeometry(0.44, 0.40, 0.024, 24, 48);
     const roundVisorMesh = new THREE.Mesh(roundVisorGeom, visorScreenMat);
     roundVisorMesh.renderOrder = 10;
     headGroup.add(roundVisorMesh);
 
-    // 3. Curved Glass Faceplate
-    const glassCoverGeom = createRoundVisorGeometry(0.442, 0.402, 0.014, 20, 36);
+    // 3. Curved Glass Faceplate (Smooth clearcoat without transmission holes or z-fighting)
+    const glassCoverGeom = createRoundVisorGeometry(0.442, 0.402, 0.030, 20, 36);
     const glassCoverMat = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
-      transmission: 0.7,
-      opacity: 0.35,
+      opacity: 0.16,
       transparent: true,
-      roughness: 0.05,
+      roughness: 0.08,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.04,
-      reflectivity: 0.9,
+      clearcoatRoughness: 0.05,
+      reflectivity: 0.8,
+      depthWrite: false,
     });
     const glassCoverMesh = new THREE.Mesh(glassCoverGeom, glassCoverMat);
     glassCoverMesh.renderOrder = 12;
     headGroup.add(glassCoverMesh);
 
-    // 4. Sleek Metallic Bezel
-    const roundBezelGeom = createRoundBezelGeometry(0.44, 0.40, 0.016, 0.009, 12, 48);
-    const roundBezelMesh = new THREE.Mesh(roundBezelGeom, darkJointMat);
-    headGroup.add(roundBezelMesh);
-
-    // 5. Headphone Ear Cups on Helmet Sides
+    // 4. Headphone Ear Cups on Helmet Sides (Solid 3D platinum metallic finish, zero dark holes)
     const headphoneRings: THREE.Mesh[] = [];
     [-1, 1].forEach((side) => {
       const earGroup = new THREE.Group();
-      earGroup.position.set(side * 0.76, 0.02, 0);
+      earGroup.position.set(side * 0.77, 0.02, 0);
       earGroup.rotation.z = side * -0.08;
 
       const earCylinderGeom = new THREE.CylinderGeometry(0.24, 0.26, 0.16, 24);
-      const earMesh = new THREE.Mesh(earCylinderGeom, darkJointMat);
+      const earMesh = new THREE.Mesh(earCylinderGeom, silverMetalMat);
       earMesh.rotation.z = Math.PI / 2;
       earGroup.add(earMesh);
 
@@ -801,10 +714,10 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       earGroup.add(earRingMesh);
       headphoneRings.push(earRingMesh);
 
-      const innerCoreGeom = new THREE.CircleGeometry(0.14, 18);
+      const innerCoreGeom = new THREE.CylinderGeometry(0.14, 0.14, 0.02, 24);
       const innerCoreMesh = new THREE.Mesh(innerCoreGeom, purpleNeonMat);
       innerCoreMesh.position.x = side * 0.09;
-      innerCoreMesh.rotation.y = side * Math.PI / 2;
+      innerCoreMesh.rotation.z = Math.PI / 2;
       earGroup.add(innerCoreMesh);
 
       headGroup.add(earGroup);
@@ -870,7 +783,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     const torsoMesh = new THREE.Mesh(torsoGeom, glossyWhiteMat);
     torsoMesh.position.y = -0.16;
     torsoMesh.castShadow = true;
-    torsoMesh.receiveShadow = true;
+    torsoMesh.receiveShadow = false;
     bodyGroup.add(torsoMesh);
 
     // Chest Reactor
@@ -1009,12 +922,12 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     });
 
     const tabletMaterials = [
-      darkJointMat,    // +X
-      darkJointMat,    // -X
-      darkJointMat,    // +Y
-      darkJointMat,    // -Y
+      silverMetalMat,  // +X
+      silverMetalMat,  // -X
+      silverMetalMat,  // +Y
+      silverMetalMat,  // -Y
       tabletScreenMat, // +Z (FRONT SCREEN)
-      darkJointMat,    // -Z
+      silverMetalMat,  // -Z
     ];
 
     const tabletGeom = new THREE.BoxGeometry(0.72, 0.98, 0.04);
@@ -1096,19 +1009,6 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     const pointerLight = new THREE.PointLight(0x00f0ff, 1.4, 2.0);
     pointerLight.position.set(0.88, 0.96, 0.56);
     rightArmGroup.add(pointerLight);
-
-    const laserBeamGeom = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0.72, -0.34, -0.34),
-    ]);
-    const laserBeamMat = new THREE.LineBasicMaterial({
-      color: 0x00f0ff,
-      transparent: true,
-      opacity: 0.55,
-      blending: THREE.AdditiveBlending,
-    });
-    const laserBeam = new THREE.Line(laserBeamGeom, laserBeamMat);
-    pointerTipMesh.add(laserBeam);
 
     // =========================================================================
     // LAYER 4: FLOATING HOLOGRAPHIC LESSON BOARD
@@ -1245,7 +1145,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     const globeTile = createFloatingTile('globe', '#06b6d4', '#0e7490', [1.55, -0.80, 0.45], [-0.18, -0.26, -0.05]);
 
     // -------------------------------------------------------------------------
-    // 6. Studio Lighting Setup
+    // 6. Studio Lighting Setup (Rich Studio Glow with Zero Shadow Acne)
     // -------------------------------------------------------------------------
     const ambientLight = new THREE.AmbientLight(
       isDarkMode ? 0xa5b4fc : 0xffffff,
@@ -1253,12 +1153,21 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     );
     scene.add(ambientLight);
 
+    // Flattering 360-degree studio bounce light ensures no crevice or joint is ever pitch-black
+    const hemiLight = new THREE.HemisphereLight(
+      isDarkMode ? 0xc7d2fe : 0xffffff,
+      isDarkMode ? 0x1e1b4b : 0x94a3b8,
+      isDarkMode ? 0.75 : 0.85
+    );
+    scene.add(hemiLight);
+
     const keyLight = new THREE.DirectionalLight(0xffffff, isDarkMode ? 2.5 : 2.2);
     keyLight.position.set(3.5, 4.5, 4.5);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.width = 1024;
-    keyLight.shadow.mapSize.height = 1024;
-    keyLight.shadow.bias = -0.001;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.normalBias = 0.03;
     scene.add(keyLight);
 
     const fillLight = new THREE.DirectionalLight(0x818cf8, isDarkMode ? 1.4 : 1.1);
@@ -1283,6 +1192,19 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     shadowPlane.position.y = -1.65;
     shadowPlane.receiveShadow = true;
     scene.add(shadowPlane);
+
+    // CRITICAL: Explicitly prevent self-shadowing and shadow acne on the 3D mascot body and satellites
+    // This completely guarantees zero black scratches, zero dark zebra streaks, and zero holes on the 3D mascot.
+    mascotRoot.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.receiveShadow = false;
+      }
+    });
+    tilesGroup.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.receiveShadow = false;
+      }
+    });
 
     // -------------------------------------------------------------------------
     // 7. Interactive Expressions & Animation Loop (Rotate Feature Removed for Smooth Scrolling)

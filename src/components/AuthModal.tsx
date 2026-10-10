@@ -22,6 +22,7 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode }: AuthModalProp
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('reCAPTCHA initialized:', import.meta.env.VITE_RECAPTCHA_SITE_KEY);
     if (isOpen) {
       loadRecaptchaScript().catch((err) => {
         console.warn('[reCAPTCHA] Init check:', err);
@@ -288,17 +289,25 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode }: AuthModalProp
             )}
 
             {/* Google reCAPTCHA Verification Assurance */}
-            <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs border ${
-              isDarkMode 
-                ? 'bg-slate-800/60 border-slate-700/80 text-slate-300' 
-                : 'bg-slate-50 border-slate-200 text-slate-600'
-            }`}>
-              <div className="flex items-center gap-2">
+            <div 
+              data-testid="recaptcha-badge"
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs border ${
+                isDarkMode 
+                  ? 'bg-slate-800/80 border-slate-700/80 text-slate-300' 
+                  : 'bg-blue-50/80 border-blue-200 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
                 <Shield className="w-4 h-4 text-blue-500 shrink-0" />
-                <span>Protected by <strong className="font-semibold text-blue-500">Google reCAPTCHA</strong></span>
+                <div className="flex flex-col">
+                  <span>Protected by <strong className="font-semibold text-blue-500">Google reCAPTCHA</strong></span>
+                  <span className="text-[10px] text-slate-400">
+                    Privacy · Terms
+                  </span>
+                </div>
               </div>
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-500 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-500 shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Active
               </span>
             </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, Search, Calculator as CalcIcon, X, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { Camera, Search, Calculator as CalcIcon, X, Sparkles, Image as ImageIcon, Shield } from 'lucide-react';
 
 interface RadialMenuProps {
   onOpenMagicLensCamera: () => void;
@@ -190,6 +190,58 @@ export function RadialMenu({
         ref={menuRef}
         className="fixed bottom-5 right-5 sm:bottom-8 sm:right-8 z-50 select-none"
       >
+        {/* Visible Google reCAPTCHA Badge neatly placed above the expandable button */}
+        <AnimatePresence>
+          {!isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              data-testid="main-recaptcha-badge"
+              className={`absolute bottom-[calc(100%+12px)] right-0 flex items-center gap-2.5 px-3 py-1.5 rounded-xl border backdrop-blur-md shadow-lg transition-all select-none whitespace-nowrap pointer-events-auto ${
+                isDarkMode 
+                  ? 'bg-slate-900/90 border-slate-700/80 text-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.5)]' 
+                  : 'bg-white/95 border-slate-200 text-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.08)]'
+              }`}
+              title="Protected by Google reCAPTCHA"
+            >
+              <div className="w-5 h-5 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+                <Shield className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex flex-col text-left">
+                <div className="flex items-center gap-1 font-bold text-[10px] leading-tight">
+                  <span className="text-slate-400 font-normal">protected by</span>
+                  <span className="text-blue-500 font-extrabold tracking-tight">reCAPTCHA</span>
+                </div>
+                <div className="flex items-center gap-1 text-[9px] text-slate-400 font-medium">
+                  <a 
+                    href="https://policies.google.com/privacy" 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="hover:underline hover:text-slate-300 transition-colors"
+                  >
+                    Privacy
+                  </a>
+                  <span>·</span>
+                  <a 
+                    href="https://policies.google.com/terms" 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="hover:underline hover:text-slate-300 transition-colors"
+                  >
+                    Terms
+                  </a>
+                </div>
+              </div>
+              <div className="ml-0.5 pl-1.5 border-l border-slate-200 dark:border-slate-700/80 flex items-center gap-1 text-[10px] text-emerald-500 font-semibold shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Active</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Radial Petals / Arc Nodes without congested side reference text */}
         <AnimatePresence>
           {isOpen && (
