@@ -100,7 +100,8 @@ export function GeneratingClassroom({
             focusArea: focusArea,
             language: language,
             gradeLevel: classLevel,
-            voice: voice
+            voice: voice,
+            uploadedFile: lessonData?.config?.uploadedFile
           })
         });
 

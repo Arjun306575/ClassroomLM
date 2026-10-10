@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, Video, Users, Star, Pin, X, ChevronRight, Menu, Play, Presentation, MessageSquare, Coffee, Search, Bell, Wand2, Camera, Image as ImageIcon, Sparkles, Moon, Sun, Maximize2, Minimize2, User, GraduationCap, Globe, Bookmark, Trash2, ArrowUpRight, LogIn, Zap, AlertTriangle, Check } from 'lucide-react';
+import { BookOpen, Video, Users, Star, Pin, X, ChevronRight, Menu, Play, Presentation, MessageSquare, Coffee, Search, Bell, Wand2, Camera, Image as ImageIcon, Sparkles, Moon, Sun, Maximize2, Minimize2, User, GraduationCap, Globe, Bookmark, Trash2, ArrowUpRight, LogIn, Zap, AlertTriangle, Check, FileText, Upload, Shield } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -18,6 +18,7 @@ import { RadialMenu } from './RadialMenu';
 import { SmartCalculator } from './SmartCalculator';
 import { useAuth, CREDIT_COSTS, DAILY_CREDITS_QUOTA } from '../firebase/authContext';
 import { AuthModal } from '../components/AuthModal';
+import { executeRecaptcha } from '../firebase/recaptcha';
 
 interface LandingPageProps {
   onGenerate: (config: any) => void;
@@ -102,6 +103,37 @@ export function LandingPage({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   
+  // Classroom Uploaded File States (PDF or Image)
+  const [modalUploadedFile, setModalUploadedFile] = useState<{
+    name: string;
+    type: string;
+    base64: string;
+    size: number;
+    previewUrl?: string;
+  } | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleModalFileUpload = (e: React.ChangeEvent<HTMLInputElement>, kind: 'pdf' | 'image') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const resultStr = reader.result as string;
+      const base64 = resultStr.split(',')[1] || '';
+      setModalUploadedFile({
+        name: file.name,
+        type: file.type || (kind === 'pdf' ? 'application/pdf' : 'image/jpeg'),
+        base64,
+        size: file.size,
+        previewUrl: kind === 'image' ? resultStr : undefined
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  
   // Full screen states
   const [isSearchFullScreen, setIsSearchFullScreen] = useState(false);
   const [isMagicFullScreen, setIsMagicFullScreen] = useState(false);
@@ -121,12 +153,23 @@ export function LandingPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topic.trim()) return;
+    const effectiveTopic = topic.trim() || (modalUploadedFile ? modalUploadedFile.name.replace(/\.[^/.]+$/, "") : "");
+    if (!effectiveTopic && !modalUploadedFile) return;
 
     // Strict Hard Lock on Generation for Guests
     if (!currentUser) {
       openAuthModal("Sign in required to create interactive lessons.");
       return;
+    }
+
+    // Execute reCAPTCHA security verification for classroom generation flow
+    try {
+      const recaptchaToken = await executeRecaptcha('generate_classroom');
+      if (recaptchaToken) {
+        console.info('[reCAPTCHA] Verified security token for classroom generation');
+      }
+    } catch (err) {
+      console.warn('[reCAPTCHA] Proceeding with classroom generation:', err);
     }
 
     // High-Cost Credit Pricing: 50 Credits per Lesson
@@ -136,7 +179,14 @@ export function LandingPage({
       return;
     }
 
-    onGenerate({ topic, persona, focusArea, classLevel, language });
+    onGenerate({ 
+      topic: effectiveTopic || "Uploaded Study Material", 
+      persona, 
+      focusArea, 
+      classLevel, 
+      language,
+      uploadedFile: modalUploadedFile
+    });
     setIsModalOpen(false);
   };
 
@@ -452,15 +502,15 @@ export function LandingPage({
         <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6 lg:gap-8 relative z-10 mt-6 sm:mt-10 mb-12 sm:mb-16">
           {[
             {
-              icon: "🎭",
-              badge: "3D LIVE AVATAR",
-              title: "Real-Time 3D Teacher",
-              desc: "Experience live lip-synced lectures with realistic facial expressions and zero server latency.",
+              icon: "👨‍🏫",
+              badge: "Real-Time 2D Teacher",
+              title: "Real-Time 2D Teacher",
+              desc: "Experience animated interactive lectures with expressive 2D character teaching, dynamic chalkboard illustrations, and zero latency.",
               iconStyle: isDarkMode 
                 ? "bg-gradient-to-tr from-blue-600/25 via-indigo-600/30 to-cyan-500/25 border-blue-400/50 text-blue-300 shadow-[0_0_25px_rgba(59,130,246,0.35)] group-hover:rotate-3"
                 : "bg-gradient-to-tr from-blue-100 via-indigo-50 to-cyan-100 border-2 border-blue-300/80 text-blue-900 shadow-sm group-hover:rotate-3",
               badgeStyle: isDarkMode 
-                ? "bg-blue-500/15 text-blue-400 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]"
+                ? "bg-blue-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.25)] font-black"
                 : "bg-blue-100 text-blue-900 border-2 border-blue-300/80 font-black shadow-sm"
             },
             {
@@ -755,17 +805,108 @@ export function LandingPage({
               
               <h3 className={`text-2xl font-black mb-6 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Generate Classroom</h3>
               
-              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:gap-5">
                 <div>
-                  <label className={`block text-sm font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>What do you want to learn?</label>
+                  <label className={`block text-sm font-bold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                    What do you want to learn?
+                  </label>
                   <input 
                     type="text" 
                     value={topic}
                     onChange={e => setTopic(e.target.value)}
-                    placeholder="e.g. How black holes work" 
-                    className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
+                    placeholder={modalUploadedFile ? `Selected: ${modalUploadedFile.name} (Topic optional)` : "e.g. How black holes work"} 
+                    className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
                     autoFocus
                   />
+                </div>
+
+                {/* PDF & Image Upload Input (Topic optional if uploaded) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={`block text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Or Upload Study Material (PDF or Image)
+                    </label>
+                    <span className="text-[11px] font-semibold text-cyan-400">
+                      Topic optional with upload
+                    </span>
+                  </div>
+
+                  <input 
+                    type="file" 
+                    ref={pdfInputRef} 
+                    accept="application/pdf" 
+                    onChange={e => handleModalFileUpload(e, 'pdf')} 
+                    className="hidden" 
+                  />
+                  <input 
+                    type="file" 
+                    ref={imageInputRef} 
+                    accept="image/*" 
+                    onChange={e => handleModalFileUpload(e, 'image')} 
+                    className="hidden" 
+                  />
+
+                  {modalUploadedFile ? (
+                    <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                      isDarkMode ? 'bg-slate-950/80 border-cyan-500/40 text-white' : 'bg-cyan-50/70 border-cyan-300 text-slate-900'
+                    }`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        {modalUploadedFile.previewUrl ? (
+                          <img 
+                            src={modalUploadedFile.previewUrl} 
+                            alt="Preview" 
+                            className="w-10 h-10 rounded-xl object-cover border border-cyan-400/50 shrink-0" 
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate">{modalUploadedFile.name}</p>
+                          <p className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {(modalUploadedFile.size / 1024).toFixed(1)} KB • {modalUploadedFile.type.includes('pdf') ? 'PDF Document' : 'Image'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setModalUploadedFile(null)}
+                        className="p-1.5 rounded-full hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0"
+                        title="Remove file"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => pdfInputRef.current?.click()}
+                        className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all active:scale-95 group ${
+                          isDarkMode 
+                            ? 'bg-slate-950 border-slate-800 hover:border-red-500/50 hover:bg-red-950/20 text-slate-300 hover:text-white' 
+                            : 'bg-slate-50 border-slate-200 hover:border-red-400 hover:bg-red-50 text-slate-700 hover:text-red-900'
+                        }`}
+                      >
+                        <FileText className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                        <span>Upload PDF</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => imageInputRef.current?.click()}
+                        className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all active:scale-95 group ${
+                          isDarkMode 
+                            ? 'bg-slate-950 border-slate-800 hover:border-blue-500/50 hover:bg-blue-950/20 text-slate-300 hover:text-white' 
+                            : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-900'
+                        }`}
+                      >
+                        <ImageIcon className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
+                        <span>Upload Image</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
@@ -841,13 +982,29 @@ export function LandingPage({
                   </div>
                 </div>
 
+                {/* Google reCAPTCHA Protection Badge */}
+                <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs border ${
+                  isDarkMode 
+                    ? 'bg-slate-900 border-slate-800 text-slate-400' 
+                    : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span>Protected by <strong className="font-semibold text-blue-500">Google reCAPTCHA</strong></span>
+                  </div>
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-500 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Active
+                  </span>
+                </div>
+
                 <button 
                   type="submit"
-                  disabled={!topic.trim()}
+                  disabled={!topic.trim() && !modalUploadedFile}
                   className="mt-4 w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98]"
                 >
                   <Presentation className="w-5 h-5" />
-                  Generate Classroom
+                  Generate Classroom {modalUploadedFile ? `from ${modalUploadedFile.type.includes('pdf') ? 'PDF' : 'Image'}` : ''}
                 </button>
               </form>
             </motion.div>

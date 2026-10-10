@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Waves, Mic, Sparkles, Zap, ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export interface LiquidWaveProps {
   isModalActive?: boolean;
@@ -8,15 +7,6 @@ export interface LiquidWaveProps {
 }
 
 export type WaveMode = 'flow' | 'voice' | 'aurora';
-
-interface Ripple {
-  x: number;
-  amplitude: number;
-  wavelength: number;
-  phase: number;
-  speed: number;
-  decay: number;
-}
 
 interface Particle {
   x: number;
@@ -43,22 +33,11 @@ export function LiquidWave({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // User interactive mode: 'flow' (organic Gemini), 'voice' (vocal resonance), 'aurora' (polar shimmer)
-  const [mode, setMode] = useState<WaveMode>('flow');
-  const [isControlsOpen, setIsControlsOpen] = useState(false);
-  const [hasInteracted, setHasInteracted] = useState(false);
+  // Ambient fluid mode: 'flow' (organic Gemini), 'voice' (vocal resonance), 'aurora' (polar shimmer)
+  const [mode] = useState<WaveMode>('flow');
 
-  // Animation & simulation refs
-  const ripplesRef = useRef<Ripple[]>([]);
+  // Ambient and simulation refs (Touch to raise removed so scrolling down is completely smooth)
   const particlesRef = useRef<Particle[]>([]);
-  const mouseRef = useRef<{ x: number; y: number; lastX: number; lastY: number; speed: number; isActive: boolean }>({
-    x: -1000,
-    y: -1000,
-    lastX: -1000,
-    lastY: -1000,
-    speed: 0,
-    isActive: false,
-  });
   const timeRef = useRef<number>(0);
   const modeRef = useRef<WaveMode>(mode);
   modeRef.current = mode;
@@ -67,144 +46,7 @@ export function LiquidWave({
   const isModalActiveRef = useRef<boolean>(isModalActive);
   isModalActiveRef.current = isModalActive;
 
-  // Trigger interactive splash ripple
-  const triggerSplash = useCallback((targetX?: number) => {
-    setHasInteracted(true);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const width = canvas.width / (window.devicePixelRatio || 1);
-    const splashX = targetX !== undefined ? targetX : width * (0.3 + Math.random() * 0.4);
-
-    // Primary splash wave
-    ripplesRef.current.push({
-      x: splashX,
-      amplitude: 36,
-      wavelength: 140,
-      phase: 0,
-      speed: 0.12,
-      decay: 0.965,
-    });
-
-    // Secondary harmonic echo wave
-    ripplesRef.current.push({
-      x: splashX,
-      amplitude: -22,
-      wavelength: 220,
-      phase: Math.PI / 2,
-      speed: 0.08,
-      decay: 0.97,
-    });
-
-    // Spawn 14 energetic spray droplets
-    const sprayColors = isDarkRef.current
-      ? ['#00F0FF', '#38BDF8', '#818CF8', '#F472B6', '#FBBF24', '#FFFFFF']
-      : ['#0284C7', '#2563EB', '#7C3AED', '#DB2777', '#F59E0B', '#FFFFFF'];
-
-    const height = canvas.height / (window.devicePixelRatio || 1);
-    const surfaceY = height * 0.45;
-
-    for (let i = 0; i < 14; i++) {
-      const angle = (Math.random() * Math.PI) - Math.PI; // upward semicircle
-      const velocity = 2.5 + Math.random() * 4.5;
-      particlesRef.current.push({
-        x: splashX + (Math.random() - 0.5) * 40,
-        y: surfaceY + (Math.random() - 0.5) * 15,
-        vx: Math.cos(angle) * velocity * 0.7,
-        vy: -Math.abs(Math.sin(angle) * velocity),
-        size: 1.5 + Math.random() * 2.5,
-        alpha: 1,
-        maxAlpha: 1,
-        color: sprayColors[Math.floor(Math.random() * sprayColors.length)],
-        wobbleSpeed: 0.05,
-        wobbleAmp: 2,
-        phase: Math.random() * Math.PI * 2,
-        life: 0,
-        maxLife: 45 + Math.random() * 35,
-        isSpray: true,
-      });
-    }
-  }, []);
-
-  // Set up pointer listener on window so interaction is seamless without blocking page buttons
-  useEffect(() => {
-    let lastMoveTime = 0;
-
-    const handlePointerMove = (e: PointerEvent) => {
-      const container = containerRef.current;
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-
-      // Check if pointer is near or inside wave zone (bottom 380px)
-      if (e.clientY >= rect.top - 60 && e.clientY <= rect.bottom + 20) {
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-
-        const dx = currentX - mouseRef.current.lastX;
-        const dy = currentY - mouseRef.current.lastY;
-        const speed = Math.sqrt(dx * dx + dy * dy);
-
-        mouseRef.current.x = currentX;
-        mouseRef.current.y = currentY;
-        mouseRef.current.speed = speed;
-        mouseRef.current.isActive = true;
-        mouseRef.current.lastX = currentX;
-        mouseRef.current.lastY = currentY;
-
-        // Generate gentle ripples if moving with moderate speed
-        const now = performance.now();
-        if (speed > 8 && now - lastMoveTime > 90) {
-          lastMoveTime = now;
-          if (ripplesRef.current.length < 8) {
-            ripplesRef.current.push({
-              x: currentX,
-              amplitude: Math.min(18, speed * 0.45),
-              wavelength: 110,
-              phase: 0,
-              speed: 0.09,
-              decay: 0.955,
-            });
-          }
-        }
-      } else {
-        mouseRef.current.isActive = false;
-      }
-    };
-
-    const handlePointerDown = (e: PointerEvent) => {
-      const container = containerRef.current;
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-
-      // Only respond if click happened in wave zone
-      if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-        // Do not intercept if user clicked on an actual interactive element (button, link, input)
-        const target = e.target as HTMLElement | null;
-        if (target && (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('[role="button"]'))) {
-          // Trigger subtle splash under button without stealing event
-          triggerSplash(e.clientX - rect.left);
-          return;
-        }
-
-        triggerSplash(e.clientX - rect.left);
-      }
-    };
-
-    const handlePointerLeave = () => {
-      mouseRef.current.isActive = false;
-    };
-
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('pointerdown', handlePointerDown, { passive: true });
-    window.addEventListener('pointerleave', handlePointerLeave, { passive: true });
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('pointerleave', handlePointerLeave);
-    };
-  }, [triggerSplash]);
-
-  // Main Canvas Simulation Loop
+  // Main Canvas Simulation Loop (Pure background fluid physics, zero touch interception)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -270,19 +112,6 @@ export function LiquidWave({
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
-      // Ripple evaluation helper
-      const getRippleOffset = (x: number): number => {
-        let totalOffset = 0;
-        for (let i = 0; i < ripplesRef.current.length; i++) {
-          const r = ripplesRef.current[i];
-          const dist = x - r.x;
-          const decayDist = Math.exp(-(dist * dist) / (2 * r.wavelength * r.wavelength));
-          const waveVal = Math.sin(r.phase + (dist / r.wavelength) * 4);
-          totalOffset += r.amplitude * decayDist * waveVal;
-        }
-        return totalOffset;
-      };
-
       // Voice resonance synthesis
       let voiceEnergy = 0;
       if (currentMode === 'voice') {
@@ -293,16 +122,6 @@ export function LiquidWave({
           Math.sin(t * 0.015) * 0.25 + 0.5
         );
         voiceEnergy = speechEnvelope * modalFactor;
-      }
-
-      // Update ripples
-      for (let i = ripplesRef.current.length - 1; i >= 0; i--) {
-        const r = ripplesRef.current[i];
-        r.phase += r.speed;
-        r.amplitude *= r.decay;
-        if (Math.abs(r.amplitude) < 0.2) {
-          ripplesRef.current.splice(i, 1);
-        }
       }
 
       // ==========================================
@@ -418,9 +237,6 @@ export function LiquidWave({
 
           let y = layer.baseY + (h1 * layer.weights[0] + h2 * layer.weights[1] + h3 * layer.weights[2]) * layer.amplitude;
 
-          // Add interactive user ripples
-          y += getRippleOffset(x) * (0.8 + layerIdx * 0.25);
-
           // Add AI Voice speech formant oscillation if voice mode active
           if (voiceEnergy > 0) {
             const v1 = Math.sin(x * 0.022 + t * 0.16) * 5.5 * voiceEnergy;
@@ -466,7 +282,6 @@ export function LiquidWave({
             const h3 = Math.sin(x * layer.freqs[2] + t * layer.speed * 0.7);
 
             let y = layer.baseY + (h1 * layer.weights[0] + h2 * layer.weights[1] + h3 * layer.weights[2]) * layer.amplitude;
-            y += getRippleOffset(x) * (0.8 + layerIdx * 0.25);
 
             if (voiceEnergy > 0) {
               const v1 = Math.sin(x * 0.022 + t * 0.16) * 5.5 * voiceEnergy;
@@ -514,30 +329,6 @@ export function LiquidWave({
           });
         }
       });
-
-      // ==========================================
-      // Interactive Mouse Surface Glow Aura
-      // ==========================================
-      if (mouseRef.current.isActive && mouseRef.current.x >= 0 && mouseRef.current.x <= logicalWidth) {
-        const mx = mouseRef.current.x;
-        const my = mouseRef.current.y;
-        const glowRad = 85;
-
-        const mouseGlow = ctx.createRadialGradient(mx, my, 0, mx, my, glowRad);
-        if (isDark) {
-          mouseGlow.addColorStop(0, 'rgba(0, 240, 255, 0.28)');
-          mouseGlow.addColorStop(0.5, 'rgba(147, 51, 234, 0.12)');
-          mouseGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        } else {
-          mouseGlow.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
-          mouseGlow.addColorStop(0.5, 'rgba(192, 132, 252, 0.15)');
-          mouseGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        }
-        ctx.fillStyle = mouseGlow;
-        ctx.beginPath();
-        ctx.arc(mx, my, glowRad, 0, Math.PI * 2);
-        ctx.fill();
-      }
 
       // ==========================================
       // Bioluminescent Stardust & Spray Droplets
@@ -624,149 +415,6 @@ export function LiquidWave({
           mixBlendMode: isDarkMode ? 'screen' : 'normal',
         }}
       />
-
-      {/* Interactive Floating Control & Mode Pill (Discreet, Aesthetic, Non-Blocking) */}
-      <div className="fixed bottom-4 left-3 sm:bottom-6 sm:left-6 z-20 pointer-events-auto flex items-center gap-2">
-        <div
-          className={`rounded-2xl border backdrop-blur-xl transition-all duration-300 shadow-xl flex items-center p-1.5 ${
-            isDarkMode
-              ? 'bg-slate-950/75 border-white/10 text-white shadow-[0_8px_30px_rgba(0,0,0,0.5)]'
-              : 'bg-white/85 border-slate-200/90 text-slate-900 shadow-[0_8px_30px_rgba(0,0,0,0.08)]'
-          }`}
-        >
-          {/* Main Status & Toggle Header Button */}
-          <button
-            type="button"
-            onClick={() => setIsControlsOpen((prev) => !prev)}
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-              isDarkMode
-                ? 'hover:bg-white/10 text-slate-200'
-                : 'hover:bg-slate-100 text-slate-800'
-            }`}
-            title="Configure Live Liquid Wave Mode"
-          >
-            {/* Animated Equalizer Waveform Bars */}
-            <div className="flex items-end gap-[2.5px] h-3.5 w-4 shrink-0" aria-hidden="true">
-              <span
-                className={`w-[3px] rounded-full transition-all duration-200 ${
-                  isDarkMode ? 'bg-cyan-400' : 'bg-cyan-600'
-                } ${mode === 'voice' ? 'animate-bounce' : 'animate-pulse'}`}
-                style={{ height: mode === 'voice' ? '100%' : '75%' }}
-              />
-              <span
-                className={`w-[3px] rounded-full transition-all duration-200 delay-75 ${
-                  isDarkMode ? 'bg-purple-400' : 'bg-purple-600'
-                } ${mode === 'voice' ? 'animate-bounce' : 'animate-pulse'}`}
-                style={{ height: mode === 'voice' ? '80%' : '100%' }}
-              />
-              <span
-                className={`w-[3px] rounded-full transition-all duration-200 delay-150 ${
-                  isDarkMode ? 'bg-pink-400' : 'bg-pink-600'
-                } ${mode === 'voice' ? 'animate-bounce' : 'animate-pulse'}`}
-                style={{ height: mode === 'voice' ? '95%' : '60%' }}
-              />
-            </div>
-
-            <span className="font-semibold tracking-tight text-[11px] sm:text-xs">
-              Live Wave
-            </span>
-
-            <span className={`text-[10px] uppercase font-black tracking-wider px-1.5 py-0.5 rounded-md ${
-              isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-50 text-blue-700'
-            }`}>
-              {mode === 'flow' ? 'Flow' : mode === 'voice' ? 'Voice AI' : 'Aurora'}
-            </span>
-
-            {isControlsOpen ? (
-              <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
-            ) : (
-              <ChevronUp className="w-3.5 h-3.5 opacity-60 shrink-0" />
-            )}
-          </button>
-
-          {/* Expanded Mode Selector Segmented Tabs */}
-          {isControlsOpen && (
-            <div className="flex items-center gap-1 pl-1 border-l border-white/10 ml-1">
-              <button
-                type="button"
-                onClick={() => setMode('flow')}
-                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                  mode === 'flow'
-                    ? isDarkMode
-                      ? 'bg-blue-500 text-white shadow-sm'
-                      : 'bg-blue-600 text-white shadow-sm'
-                    : isDarkMode
-                      ? 'text-slate-400 hover:text-white hover:bg-white/5'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                🌊 Flow
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode('voice')}
-                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                  mode === 'voice'
-                    ? isDarkMode
-                      ? 'bg-purple-500 text-white shadow-sm'
-                      : 'bg-purple-600 text-white shadow-sm'
-                    : isDarkMode
-                      ? 'text-slate-400 hover:text-white hover:bg-white/5'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title="AI Speech Resonance Simulation"
-              >
-                🎙️ Voice Pulse
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode('aurora')}
-                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                  mode === 'aurora'
-                    ? isDarkMode
-                      ? 'bg-emerald-500 text-white shadow-sm'
-                      : 'bg-emerald-600 text-white shadow-sm'
-                    : isDarkMode
-                      ? 'text-slate-400 hover:text-white hover:bg-white/5'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title="Cosmic Northern Lights Shimmer"
-              >
-                ✨ Aurora
-              </button>
-            </div>
-          )}
-
-          {/* Quick Interactive Wave Splash Button */}
-          <button
-            type="button"
-            onClick={() => triggerSplash()}
-            className={`p-1.5 ml-1 rounded-xl transition-all active:scale-90 ${
-              isDarkMode
-                ? 'hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300'
-                : 'hover:bg-cyan-50 text-cyan-600 hover:text-cyan-700'
-            }`}
-            title="Create interactive liquid ripple splash"
-          >
-            <Zap className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Micro Interaction Hint (Fades out once user has interacted) */}
-        {!hasInteracted && (
-          <div
-            className={`hidden md:flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium animate-pulse border ${
-              isDarkMode
-                ? 'bg-slate-900/60 border-white/5 text-slate-400'
-                : 'bg-white/60 border-slate-200/80 text-slate-500'
-            }`}
-          >
-            <span>Move cursor or click to ripple liquid</span>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

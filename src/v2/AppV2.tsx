@@ -112,12 +112,16 @@ export default function AppV2() {
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   const handleGenerate = async (config: any) => {
+    const topicTitle = config.topic?.trim() || (config.uploadedFile ? config.uploadedFile.name.replace(/\.[^/.]+$/, "") : "Interactive Lesson");
     const newLesson = {
       id: Date.now().toString(),
-      title: config.topic,
+      title: topicTitle,
       description: `Class: ${config.classLevel || 'N/A'} | Lang: ${config.language || 'N/A'} | Persona: ${config.persona}`,
       data: {},
-      config: config,
+      config: {
+        ...config,
+        topic: topicTitle
+      },
       messages: []
     };
     setActiveLesson(newLesson);
@@ -289,13 +293,13 @@ export default function AppV2() {
       timeline,
       isLoadedFromSaved: true,
       loadedFromSaved: true,
-      quiz: lesson?.quiz || lesson?.data?.quiz || [],
+      quiz: [], // Strictly reset to empty array so LiveClassroom generates fresh questions on every play!
       data: {
         ...(lesson?.data || {}),
         timeline,
         isLoadedFromSaved: true,
         loadedFromSaved: true,
-        quiz: lesson?.quiz || lesson?.data?.quiz || [],
+        quiz: [],
         config: lesson?.config || lesson?.data?.config || {}
       }
     };

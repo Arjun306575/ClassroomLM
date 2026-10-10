@@ -53,15 +53,23 @@ app.use(express.static(path.join(process.cwd(), "public")));
 // ============================================================================
 // Quota Hijack Prevention: Server-Side Firebase Auth Token Verification
 // ============================================================================
-let firebaseApiKey = "";
-let firebaseProjectId = "";
+let firebaseApiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || "";
+let firebaseProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "";
+let recaptchaSiteKey = process.env.RECAPTCHA_SITE_KEY || process.env.VITE_RECAPTCHA_SITE_KEY || process.env.FIREBASE_RECAPTCHA_SITE_KEY || process.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY || "";
 try {
   const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
   if (fs.existsSync(configPath)) {
     const raw = fs.readFileSync(configPath, "utf8");
     const parsed = JSON.parse(raw);
-    firebaseApiKey = parsed.apiKey || "";
-    firebaseProjectId = parsed.projectId || "";
+    if (!firebaseApiKey && parsed.apiKey && !parsed.apiKey.includes("process.env") && !parsed.apiKey.startsWith("${")) {
+      firebaseApiKey = parsed.apiKey;
+    }
+    if (!firebaseProjectId && parsed.projectId && !parsed.projectId.includes("process.env") && !parsed.projectId.startsWith("${")) {
+      firebaseProjectId = parsed.projectId;
+    }
+    if (!recaptchaSiteKey && parsed.recaptchaSiteKey && !parsed.recaptchaSiteKey.includes("process.env") && !parsed.recaptchaSiteKey.startsWith("${")) {
+      recaptchaSiteKey = parsed.recaptchaSiteKey;
+    }
   }
 } catch (e) {
   console.warn("[Auth Security] Failed to load firebase-applet-config.json:", e);
@@ -523,7 +531,7 @@ async function generateLessonLogic(req: express.Request, res: express.Response) 
     } = req.body;
     
     const client = getGeminiClient();
-    const effectiveTopic = customTopic || prompt || (pastedText ? pastedText.slice(0, 60) : "Interactive Lesson");
+    const effectiveTopic = customTopic || prompt || (uploadedFile?.name ? uploadedFile.name.replace(/\.[^/.]+$/, "") : (pastedText ? pastedText.slice(0, 60) : "Interactive Lesson"));
     const focusList = Array.isArray(focusArea) ? focusArea : (focusArea ? [focusArea] : []);
     
     // Check if user explicitly selected Visual Diagrams in focus areas
@@ -606,6 +614,8 @@ TOPIC & LESSON PROMPT:
     
     if (uploadedFile && uploadedFile.base64 && uploadedFile.type) {
       promptText += `- Attached Document: "${uploadedFile.name}" (${uploadedFile.type})\n`;
+      promptText += `GROUNDING INSTRUCTION FOR ATTACHED ${uploadedFile.type.includes('pdf') ? 'PDF' : 'IMAGE'}:
+Ground this entire multi-slide blackboard lesson directly on the attached document/image. Explain its key formulas, principles, concepts, and diagrams step-by-step for grade level "${gradeLevel}" in language "${language}", adhering strictly to persona "${persona}".\n`;
       contents.push({
         inlineData: {
           mimeType: uploadedFile.type,
@@ -901,7 +911,138 @@ Respond strictly with valid JSON matching the schema.`;
 
 } // end of generateLessonLogic
 
+function generateFallbackQuiz(topic: string, lessonSummary?: string, language = "English"): any[] {
+  const cleanTopic = topic || "Lesson Topic";
+  return [
+    {
+      question: `Which of the following best summarizes the primary concept of ${cleanTopic}?`,
+      options: [
+        `It provides the foundational operating mechanism and governing rules.`,
+        `It operates independently of physical and scientific principles.`,
+        `It was deprecated and has no real-world application today.`,
+        `It only applies in hypothetical situations without evidence.`
+      ],
+      correctIndex: 0,
+      explanation: `The foundational concept of ${cleanTopic} defines the primary operational framework and rules covered in the lesson.`
+    },
+    {
+      question: `When analyzing the step-by-step breakdown of ${cleanTopic}, what is the critical factor to identify first?`,
+      options: [
+        `Surface symptoms rather than root interactions`,
+        `The core governing relationship and initial baseline state`,
+        `Random variable fluctuations without baseline values`,
+        `Ignoring boundary limits and assumptions`
+      ],
+      correctIndex: 1,
+      explanation: `Mastering ${cleanTopic} requires isolating the initial baseline state and governing relationships before analyzing downstream effects.`
+    },
+    {
+      question: `How does the mechanism of ${cleanTopic} directly translate to modern practical applications?`,
+      options: [
+        `It serves as an analytical model for real-world engineering and nature.`,
+        `It has no practical utility outside theoretical discussions.`,
+        `It produces random results that cannot be calculated or predicted.`,
+        `It contradicts all standard empirical experimental observations.`
+      ],
+      correctIndex: 0,
+      explanation: `As highlighted in the lesson, ${cleanTopic} provides predictive analytical models utilized across modern applications.`
+    },
+    {
+      question: `What common misconception should students avoid when solving problems related to ${cleanTopic}?`,
+      options: [
+        `Verifying units and dimensional consistency`,
+        `Checking core assumptions before applying equations`,
+        `Confusing correlation with underlying causal mechanisms`,
+        `Reviewing step-by-step algebraic derivations`
+      ],
+      correctIndex: 2,
+      explanation: `A frequent trap in ${cleanTopic} is mistaking superficial correlation for the true underlying causal mechanism.`
+    }
+  ];
+}
+
 app.post("/api/generate-lesson", verifyFirebaseToken, generateLessonLogic);
+
+/**
+ * API: Fresh Quiz Generation for Lessons (3-5 Questions)
+ * Generates fresh multiple-choice questions for any lesson, including saved lessons.
+ */
+app.post("/api/generate-quiz", async (req, res) => {
+  try {
+    const { topic, language = "English", gradeLevel = "Class 10", lessonSummary, count = 4 } = req.body;
+    const client = getGeminiClient();
+
+    const targetCount = Math.max(3, Math.min(5, Number(count) || 4));
+    const effectiveTopic = topic || "Educational Lesson";
+
+    const promptText = `You are an expert school assessment teacher. 
+Create a fresh, high-yield, engaging multiple-choice quiz of exactly ${targetCount} questions in "${language}" for a ${gradeLevel} student.
+Every question MUST be directly related to the lesson explained.
+
+LESSON TOPIC:
+"${effectiveTopic}"
+
+LESSON CONTENT / SLIDES EXPLAINED:
+${lessonSummary || 'Core concepts, mechanisms, step-by-step formulas, and practical applications.'}
+
+CRITICAL RULES:
+1. Generate exactly ${targetCount} questions.
+2. Every question must have exactly 4 choices in "options" (A, B, C, D).
+3. "correctIndex" must be the 0-based index (0, 1, 2, or 3) of the correct answer.
+4. "explanation" must clearly explain why that answer is correct and clarify any common traps.
+5. Everything must be in "${language}".
+6. Do NOT make questions overly trivial; test real comprehension of the lesson explained.`;
+
+    const quizSchema = {
+      type: Type.OBJECT,
+      properties: {
+        quiz: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              question: { type: Type.STRING },
+              options: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              correctIndex: { type: Type.INTEGER },
+              explanation: { type: Type.STRING }
+            },
+            required: ["question", "options", "correctIndex", "explanation"]
+          }
+        }
+      },
+      required: ["quiz"]
+    };
+
+    const response = await generateContentWithRetry(client, {
+      model: "gemini-3.1-flash-lite",
+      contents: [{ text: promptText }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: quizSchema,
+        systemInstruction: `You are a curriculum assessment expert. Create a fresh quiz strictly based on the lesson provided. Language: ${language}.`,
+        temperature: 0.7
+      }
+    }, ["gemini-3.8-flash", "gemini-flash-latest"]);
+
+    const cleanedText = cleanJsonString(response.text || "{}");
+    const parsed = JSON.parse(cleanedText);
+    const questions = parsed.quiz || [];
+
+    if (Array.isArray(questions) && questions.length >= 3) {
+      return res.json({ quiz: questions.slice(0, 5) });
+    }
+
+    throw new Error("Model returned invalid quiz format");
+  } catch (err: any) {
+    console.warn("[Generate Quiz] Falling back to intelligent in-memory generator:", err.message);
+    const topic = req.body?.topic || "Lesson Review";
+    const fallbackQuiz = generateFallbackQuiz(topic, req.body?.lessonSummary, req.body?.language);
+    return res.json({ quiz: fallbackQuiz });
+  }
+});
 
 // In-memory store for async jobs
 const jobsStore: Record<string, { status: 'pending' | 'completed' | 'error', data?: any, error?: string }> = {};
@@ -937,6 +1078,13 @@ app.get("/api/job-status", (req, res) => {
     return res.status(404).json({ error: "Job not found" });
   }
   res.json(jobsStore[id]);
+});
+
+app.get("/api/recaptcha-config", (_req, res) => {
+  res.json({
+    siteKey: recaptchaSiteKey,
+    configured: Boolean(recaptchaSiteKey),
+  });
 });
 
 /**

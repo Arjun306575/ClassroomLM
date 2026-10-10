@@ -1,12 +1,12 @@
 {
-  "projectId": "dub-standard-883d0",
-  "appId": "1:992687057357:web:78d2e341828dda52553c84",
-  "apiKey": "",
-  "authDomain": "dub-standard-883d0.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-classroomlm-78fec33b-099b-4949-b71e-720ba41add65",
-  "storageBucket": "dub-standard-883d0.firebasestorage.app",
-  "messagingSenderId": "992687057357",
-  "measurementId": "",
-  "oAuthClientId": "992687057357-8gsjf8703m9ntvbjivkp626ecdj9l14h.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "process.env.FIREBASE_PROJECT_ID || import.meta.env.VITE_FIREBASE_PROJECT_ID",
+  "appId": "process.env.FIREBASE_APP_ID || import.meta.env.VITE_FIREBASE_APP_ID",
+  "apiKey": "process.env.FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY",
+  "authDomain": "process.env.FIREBASE_AUTH_DOMAIN || import.meta.env.VITE_FIREBASE_AUTH_DOMAIN",
+  "firestoreDatabaseId": "process.env.FIREBASE_FIRESTORE_DATABASE_ID || import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID",
+  "storageBucket": "process.env.FIREBASE_STORAGE_BUCKET || import.meta.env.VITE_FIREBASE_STORAGE_BUCKET",
+  "messagingSenderId": "process.env.FIREBASE_MESSAGING_SENDER_ID || import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID",
+  "measurementId": "process.env.FIREBASE_MEASUREMENT_ID || import.meta.env.VITE_FIREBASE_MEASUREMENT_ID",
+  "oAuthClientId": "process.env.FIREBASE_OAUTH_CLIENT_ID || import.meta.env.VITE_FIREBASE_OAUTH_CLIENT_ID",
+  "recaptchaSiteKey": "process.env.RECAPTCHA_SITE_KEY || process.env.FIREBASE_RECAPTCHA_SITE_KEY || import.meta.env.VITE_RECAPTCHA_SITE_KEY || import.meta.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY"
 }

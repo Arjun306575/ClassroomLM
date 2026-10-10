@@ -206,8 +206,8 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     renderer.domElement.style.outline = 'none';
     renderer.domElement.style.border = 'none';
     renderer.domElement.style.background = 'transparent';
-    renderer.domElement.style.touchAction = 'none';
-    renderer.domElement.style.cursor = 'grab';
+    renderer.domElement.style.touchAction = 'pan-y';
+    renderer.domElement.style.cursor = 'default';
     renderer.domElement.style.filter = isDarkMode 
       ? 'drop-shadow(0 18px 40px rgba(6, 182, 212, 0.18))' 
       : 'drop-shadow(0 18px 40px rgba(37, 99, 235, 0.14))';
@@ -1285,57 +1285,13 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     scene.add(shadowPlane);
 
     // -------------------------------------------------------------------------
-    // 7. Interactive Physics, 3D Drag Rotation & Mouse Tracking
+    // 7. Interactive Expressions & Animation Loop (Rotate Feature Removed for Smooth Scrolling)
     // -------------------------------------------------------------------------
-    const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
-    const dragRotation = { x: 0, y: 0, targetX: 0, targetY: 0 };
-    let isDragging = false;
-    let pointerStartX = 0;
-    let pointerStartY = 0;
-
     let blinkTimer = 0;
     let currentExpression: ExpressionType = 'normal';
     let celebrationTimer = 0;
     let animationFrameId: number;
     const clock = new THREE.Clock();
-
-    const handlePointerDown = (e: PointerEvent) => {
-      isDragging = true;
-      pointerStartX = e.clientX;
-      pointerStartY = e.clientY;
-      renderer.domElement.style.cursor = 'grabbing';
-    };
-
-    const handlePointerMove = (e: PointerEvent) => {
-      const rect = container.getBoundingClientRect();
-      const normX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const normY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-      mouse.targetX = THREE.MathUtils.clamp(normX, -1, 1);
-      mouse.targetY = THREE.MathUtils.clamp(normY, -1, 1);
-
-      if (isDragging) {
-        const deltaX = e.clientX - pointerStartX;
-        const deltaY = e.clientY - pointerStartY;
-        pointerStartX = e.clientX;
-        pointerStartY = e.clientY;
-
-        dragRotation.targetY += deltaX * 0.007;
-        dragRotation.targetX += deltaY * 0.005;
-        dragRotation.targetX = THREE.MathUtils.clamp(dragRotation.targetX, -0.45, 0.45);
-      }
-    };
-
-    const handlePointerUp = () => {
-      isDragging = false;
-      renderer.domElement.style.cursor = 'grab';
-    };
-
-    const handlePointerLeave = () => {
-      isDragging = false;
-      mouse.targetX = 0;
-      mouse.targetY = 0;
-      renderer.domElement.style.cursor = 'grab';
-    };
 
     const handleClick = () => {
       setIsInteracting(true);
@@ -1354,10 +1310,6 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       }, 900);
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    container.addEventListener('pointerdown', handlePointerDown);
-    container.addEventListener('pointerleave', handlePointerLeave);
     container.addEventListener('click', handleClick);
 
     const handleResize = () => {
@@ -1378,17 +1330,6 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       animationFrameId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
-      // Mouse smoothing & Drag spring return
-      mouse.x += (mouse.targetX - mouse.x) * 0.08;
-      mouse.y += (mouse.targetY - mouse.y) * 0.08;
-
-      if (!isDragging) {
-        dragRotation.targetX += (0 - dragRotation.targetX) * 0.04;
-        dragRotation.targetY += (0 - dragRotation.targetY) * 0.03;
-      }
-      dragRotation.x += (dragRotation.targetX - dragRotation.x) * 0.1;
-      dragRotation.y += (dragRotation.targetY - dragRotation.y) * 0.1;
-
       // Levitation floating motion with celebration bounce
       let floatOffset = Math.sin(elapsedTime * 1.6) * 0.1;
       if (celebrationTimer > 0) {
@@ -1397,18 +1338,13 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       }
       mascotRoot.position.y = floatOffset;
 
-      // Combined 3D Rotation (interactive drag + look-at)
-      mascotRoot.rotation.y = dragRotation.y + mouse.x * 0.35;
-      mascotRoot.rotation.x = dragRotation.x - mouse.y * 0.24 + (floatOffset * 0.05);
-      mascotRoot.rotation.z = -mouse.x * 0.05;
-
-      // Head Micro-Tracking in true 3D space
-      headGroup.rotation.y = mouse.x * 0.28;
-      headGroup.rotation.x = -mouse.y * 0.22;
+      // Fixed upright orientation (no drag rotation, ensuring smooth vertical scrolling)
+      mascotRoot.rotation.set(0, 0, 0);
+      headGroup.rotation.set(0, 0, 0);
 
       // Tassel Swing Physics
-      tasselGroup.rotation.z = Math.sin(elapsedTime * 2.2) * 0.14 + (mouse.x * 0.16);
-      tasselGroup.rotation.x = Math.cos(elapsedTime * 1.8) * 0.1 - (mouse.y * 0.12);
+      tasselGroup.rotation.z = Math.sin(elapsedTime * 2.2) * 0.14;
+      tasselGroup.rotation.x = Math.cos(elapsedTime * 1.8) * 0.1;
 
       // Interactive Arm Waving on click celebration
       if (celebrationTimer > 0) {
@@ -1486,11 +1422,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     // -------------------------------------------------------------------------
     return () => {
       cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('resize', handleResize);
-      container.removeEventListener('pointerdown', handlePointerDown);
-      container.removeEventListener('pointerleave', handlePointerLeave);
       container.removeEventListener('click', handleClick);
 
       faceTexture.dispose();
@@ -1529,14 +1461,14 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     >
       <div
         ref={mountRef}
-        title="ClassroomLM AI Teacher - Drag to rotate in 3D · Click to interact"
-        className="w-[360px] sm:w-[560px] md:w-[740px] lg:w-[860px] xl:w-[940px] max-w-[min(98vw,960px)] h-[320px] sm:h-[420px] md:h-[480px] lg:h-[540px] cursor-grab active:cursor-grabbing transition-transform duration-300"
+        title="ClassroomLM AI Teacher · Click to interact"
+        className="w-[360px] sm:w-[560px] md:w-[740px] lg:w-[860px] xl:w-[940px] max-w-[min(98vw,960px)] h-[320px] sm:h-[420px] md:h-[480px] lg:h-[540px] cursor-default transition-transform duration-300"
         style={{
           background: 'transparent',
           border: 'none',
           outline: 'none',
           boxShadow: 'none',
-          touchAction: 'none',
+          touchAction: 'pan-y',
         }}
       />
     </div>

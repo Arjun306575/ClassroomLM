@@ -28,9 +28,12 @@ export function PreClassroom({ lessonData, onEnter, onSaveLater, onGoHome, isDar
       <div className="z-10 text-center max-w-2xl px-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Sparkles className="w-12 h-12 text-indigo-500 mx-auto mb-4" />
-          <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">Your Classroom is Ready</h1>
-          <p className={`text-lg md:text-xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+          <h1 className="text-4xl md:text-5xl font-black mb-3 tracking-tight">Your Classroom is Ready</h1>
+          <p className={`text-lg md:text-xl font-semibold mb-2 ${isDarkMode ? 'text-cyan-300' : 'text-indigo-600'}`}>
             "{lessonData?.title || 'Interactive Lesson'}"
+          </p>
+          <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+            Interactive blackboard slides with AI Teacher & fresh assessment quiz at the end
           </p>
         </motion.div>
 

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   Send, X, Loader2, Hand, Mic, Globe, 
   Library, Maximize2, Minimize2, ChevronLeft, ChevronRight, Volume2,
-  Sparkles
+  Sparkles, Award, BookOpen, ArrowRight, RotateCcw, CheckCircle2, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
@@ -11,7 +11,9 @@ import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import 'katex/dist/katex.min.css';
 import { PreClassroom } from './PreClassroom';
+import { InteractiveQuiz2D } from './InteractiveQuiz2D';
 import { useAuth } from '../firebase/authContext';
+import { QuizQuestion } from '../types';
 
 // Official valid Gemini voices: 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
 const languageMap: Record<string, { lang: string, voice: string }> = {
@@ -629,6 +631,11 @@ export function LiveClassroom({
   const [mascotPose, setMascotPose] = useState("happy");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSlideNarrationComplete, setIsSlideNarrationComplete] = useState(false);
+
+  // Interactive Lesson Quiz States (3-5 Questions related to lesson explained)
+  const [isQuizActive, setIsQuizActive] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+  const [isQuizLoading, setIsQuizLoading] = useState(false);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -975,6 +982,77 @@ export function LiveClassroom({
     }
   }, [playAudioWithEmotion, lessonData]);
 
+  /**
+   * Fresh Quiz Generator for Lessons
+   * Always synthesizes fresh, relevant assessment questions related directly to the lesson explained.
+   * Runs freshly whenever a saved lesson is played or when explicitly requested.
+   */
+  const fetchFreshQuiz = useCallback(async (customTimeline?: any[]) => {
+    if (!isMountedRef.current) return;
+    setIsQuizLoading(true);
+    try {
+      const activeTimeline = customTimeline || timeline;
+      const topic = lessonData?.config?.topic || lessonData?.title || boardHeading || "Lesson Topic";
+      const language = currentLanguage || "English";
+      const gradeLevel = lessonData?.config?.classLevel || "Class 10";
+
+      // Extract comprehensive summary of what was actually explained across the slides
+      let lessonSummary = "";
+      if (Array.isArray(activeTimeline) && activeTimeline.length > 0) {
+        lessonSummary = activeTimeline.map((step: any, idx: number) => {
+          const heading = step.whiteboardContent?.heading || `Slide ${idx + 1}`;
+          const bullets = Array.isArray(step.whiteboardContent?.bulletPoints)
+            ? step.whiteboardContent.bulletPoints.join('; ')
+            : '';
+          const dialogue = step.spokenDialogue || step.bubbleCaption || '';
+          return `Slide ${idx + 1} (${heading}): ${bullets}. Spoken explanation: ${dialogue}`;
+        }).join('\n\n');
+      }
+
+      const res = await fetch("/api/generate-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          language,
+          gradeLevel,
+          lessonSummary: lessonSummary || `Core foundations, mechanisms, equations, and applications of ${topic}`,
+          count: 4
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (isMountedRef.current && Array.isArray(data.quiz) && data.quiz.length >= 3) {
+          setQuizQuestions(data.quiz.slice(0, 5));
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("[LiveClassroom] Failed to fetch fresh quiz:", err);
+    } finally {
+      if (isMountedRef.current) {
+        setIsQuizLoading(false);
+      }
+    }
+  }, [timeline, lessonData, boardHeading, currentLanguage]);
+
+  const handleQuizSubmit = (score: number, total: number) => {
+    setMascotPose(score === total ? "celebrating" : score >= total * 0.7 ? "happy" : "explaining");
+    setCaptionLine(`Quiz completed! You scored ${score} out of ${total}. Review explanations below.`);
+  };
+
+  const handleRetakeQuiz = () => {
+    setMascotPose("thinking");
+    setCaptionLine("Retaking quiz! Answer each question thoughtfully.");
+  };
+
+  const handleGenerateFreshQuiz = () => {
+    setMascotPose("explaining");
+    setCaptionLine("Generating fresh assessment questions for this lesson...");
+    fetchFreshQuiz();
+  };
+
   // Initial startup: generate or load lesson steps
   useEffect(() => {
     const initLesson = async () => {
@@ -1028,6 +1106,10 @@ export function LiveClassroom({
         setTimeline(timelineToUse);
         setCurrentStepIndex(0);
         await applyTimelineStep(timelineToUse[0], 0, timelineToUse.length);
+
+        // CRITICAL: Fresh Quiz Generation for Saved Lessons!
+        // "the quiz should be generated again freshly whenever the user plays the saved lesson."
+        fetchFreshQuiz(timelineToUse);
         return;
       }
 
@@ -1064,6 +1146,11 @@ export function LiveClassroom({
             setTimeline(data.timeline);
             setCurrentStepIndex(0);
             await applyTimelineStep(data.timeline[0], 0, data.timeline.length);
+            if (Array.isArray(data.quiz) && data.quiz.length >= 3) {
+              setQuizQuestions(data.quiz.slice(0, 5));
+            } else {
+              fetchFreshQuiz(data.timeline);
+            }
             return;
           }
         }
@@ -1155,11 +1242,12 @@ export function LiveClassroom({
         setTimeline(fallbackSteps);
         setCurrentStepIndex(0);
         await applyTimelineStep(fallbackSteps[0], 0, fallbackSteps.length);
+        fetchFreshQuiz(fallbackSteps);
       }
     };
 
     initLesson();
-  }, [lessonData, currentLanguage, currentVoiceConfig, applyTimelineStep]);
+  }, [lessonData, currentLanguage, currentVoiceConfig, applyTimelineStep, fetchFreshQuiz]);
 
   const handleReplayCurrentSlide = () => {
     if (timeline[currentStepIndex]) {
@@ -1354,6 +1442,47 @@ export function LiveClassroom({
                 {lessonData?.config?.classLevel || "Class 10"} • {currentLanguage}
               </span>
             </div>
+
+            {/* Center Switcher: Slides vs Quiz */}
+            <div className="flex items-center bg-slate-800/90 rounded-full p-0.5 sm:p-1 border border-slate-700/80 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setIsQuizActive(false)}
+                className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 ${
+                  !isQuizActive
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="View lesson blackboard slides"
+              >
+                <BookOpen className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span className="hidden xs:inline">Slides</span>
+                <span>({currentStepIndex + 1}/{Math.max(1, timeline.length)})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsQuizActive(true);
+                  if (quizQuestions.length === 0 && !isQuizLoading) {
+                    fetchFreshQuiz();
+                  }
+                }}
+                className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 ${
+                  isQuizActive
+                    ? 'bg-gradient-to-r from-cyan-400 to-indigo-500 text-slate-950 font-black shadow-md'
+                    : currentStepIndex >= timeline.length - 1
+                    ? 'bg-cyan-500/20 text-cyan-300 hover:text-white border border-cyan-400/40 animate-pulse'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Take 3-5 assessment questions based on this lesson"
+              >
+                <Award className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span>Quiz</span>
+                {quizQuestions.length > 0 && (
+                  <span className="text-[10px] opacity-80">({quizQuestions.length} Qs)</span>
+                )}
+              </button>
+            </div>
             
             <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
               {/* Fullscreen Toggle Button */}
@@ -1435,18 +1564,31 @@ export function LiveClassroom({
                     <div className="w-[150%] h-full bg-[#1e293b]" />
                   </motion.div>
                 )}
-                <Blackboard2D 
-                  heading={boardHeading} 
-                  bullets={boardBullets} 
-                  image={boardImage}
-                  imageCaption={boardImageCaption}
-                  diagramType={boardDiagramType}
-                  diagramLabels={boardDiagramLabels}
-                  mathEquation={boardMathEquation}
-                  activeLineIndex={activeBulletIndex}
-                  revealedCount={revealedBulletCount}
-                  isVisualDiagramsSelected={isVisualDiagramsSelected}
-                />
+                {isQuizActive ? (
+                  <InteractiveQuiz2D
+                    questions={quizQuestions}
+                    isLoading={isQuizLoading}
+                    topic={lessonData?.title || boardHeading || "Lesson Quiz"}
+                    isDarkMode={isDarkMode}
+                    onSubmitQuiz={handleQuizSubmit}
+                    onRetakeQuiz={handleRetakeQuiz}
+                    onGenerateFreshQuiz={handleGenerateFreshQuiz}
+                    onReturnToSlides={() => setIsQuizActive(false)}
+                  />
+                ) : (
+                  <Blackboard2D 
+                    heading={boardHeading} 
+                    bullets={boardBullets} 
+                    image={boardImage}
+                    imageCaption={boardImageCaption}
+                    diagramType={boardDiagramType}
+                    diagramLabels={boardDiagramLabels}
+                    mathEquation={boardMathEquation}
+                    activeLineIndex={activeBulletIndex}
+                    revealedCount={revealedBulletCount}
+                    isVisualDiagramsSelected={isVisualDiagramsSelected}
+                  />
+                )}
               </div>
             </section>
           </main>
@@ -1528,7 +1670,7 @@ export function LiveClassroom({
             {/* Right: Slide Step Navigation */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {/* Prominent Blinking Next Slide Action Button after TTS Audio Completes */}
-              {isSlideNarrationComplete && currentStepIndex < timeline.length - 1 && (
+              {isSlideNarrationComplete && currentStepIndex < timeline.length - 1 && !isQuizActive && (
                 <motion.button
                   type="button"
                   onClick={handleNextStep}
@@ -1551,16 +1693,45 @@ export function LiveClassroom({
                 </motion.button>
               )}
 
-              {/* Final slide completed celebration */}
-              {isSlideNarrationComplete && currentStepIndex >= timeline.length - 1 && (
-                <motion.div
-                  animate={{ scale: [1, 1.05, 1] }}
-                  transition={{ repeat: Infinity, duration: 1.6 }}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/90 text-white font-bold text-xs md:text-sm shadow-[0_0_15px_rgba(16,185,129,0.5)] ring-2 ring-emerald-300"
+              {/* End of Lesson: Prominent CTA to Take Quiz */}
+              {!isQuizActive && currentStepIndex >= timeline.length - 1 && (
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    setIsQuizActive(true);
+                    if (quizQuestions.length === 0 && !isQuizLoading) {
+                      fetchFreshQuiz();
+                    }
+                  }}
+                  animate={{ 
+                    scale: [1, 1.05, 1],
+                    boxShadow: [
+                      "0 0 10px rgba(34,211,238,0.5)",
+                      "0 0 26px rgba(34,211,238,0.9)",
+                      "0 0 10px rgba(34,211,238,0.5)"
+                    ]
+                  }}
+                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                  className="flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-cyan-200 cursor-pointer"
+                  title="Lesson complete! Take 3-5 assessment questions related to this lesson"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                  <span>Lesson Complete! 🎉</span>
-                </motion.div>
+                  <Award className="w-4 h-4 fill-current text-indigo-950" />
+                  <span className="tracking-wide">Take Lesson Quiz ({quizQuestions.length > 0 ? quizQuestions.length : '3–5'} Qs)</span>
+                  <ChevronRight className="w-4 h-4 stroke-[3]" />
+                </motion.button>
+              )}
+
+              {/* While in Quiz view: Button to Return to Slides */}
+              {isQuizActive && (
+                <button
+                  type="button"
+                  onClick={() => setIsQuizActive(false)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs md:text-sm border border-slate-700 shadow-md transition-all active:scale-95"
+                  title="Return to review blackboard slides"
+                >
+                  <BookOpen className="w-4 h-4 text-cyan-400" />
+                  <span>Review Slides</span>
+                </button>
               )}
 
               {/* Step Counter Pill */}
@@ -1579,14 +1750,24 @@ export function LiveClassroom({
                 </span>
                 <button
                   type="button"
-                  onClick={handleNextStep}
-                  disabled={currentStepIndex >= timeline.length - 1}
+                  onClick={() => {
+                    if (currentStepIndex >= timeline.length - 1) {
+                      setIsQuizActive(true);
+                      if (quizQuestions.length === 0 && !isQuizLoading) {
+                        fetchFreshQuiz();
+                      }
+                    } else {
+                      handleNextStep();
+                    }
+                  }}
                   className={`p-1.5 rounded-full transition-all ${
-                    isSlideNarrationComplete && currentStepIndex < timeline.length - 1
+                    currentStepIndex >= timeline.length - 1 && !isQuizActive
+                      ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.9)] animate-pulse ring-2 ring-cyan-200 scale-105'
+                      : isSlideNarrationComplete && currentStepIndex < timeline.length - 1
                       ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.9)] animate-pulse ring-2 ring-cyan-200 scale-110'
                       : 'hover:bg-slate-700 disabled:opacity-30 text-white'
                   }`}
-                  title="Next Slide"
+                  title={currentStepIndex >= timeline.length - 1 ? "Advance to Lesson Quiz" : "Next Slide"}
                 >
                   <ChevronRight className="w-4 h-4 stroke-[2.5]" />
                 </button>
