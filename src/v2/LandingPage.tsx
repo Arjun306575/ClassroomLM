@@ -19,6 +19,7 @@ import { SmartCalculator } from './SmartCalculator';
 import { useAuth, CREDIT_COSTS, DAILY_CREDITS_QUOTA } from '../firebase/authContext';
 import { AuthModal } from '../components/AuthModal';
 import { executeRecaptcha, loadRecaptchaScript } from '../firebase/recaptcha';
+import { AdsterraAd } from '../components/AdsterraAd';
 
 interface LandingPageProps {
   onGenerate: (config: any) => void;
@@ -568,6 +569,11 @@ export function LandingPage({
               </p>
             </motion.div>
           ))}
+        </div>
+
+        {/* Adsterra Native Placement directly below Feature Cards Grid */}
+        <div className="w-full flex justify-center items-center relative z-10 px-4">
+          <AdsterraAd />
         </div>
       </main>
 

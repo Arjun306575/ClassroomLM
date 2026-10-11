@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Loader2, Sparkles, BookOpen, Brain, Lightbulb, Play, Home, CheckCircle2, BookmarkCheck } from 'lucide-react';
 import { Realistic3DDNA } from './Realistic3DDNA';
 import { useAuth } from '../firebase/authContext';
+import { AdsterraAd } from '../components/AdsterraAd';
 
 interface GeneratingClassroomProps {
   lessonData: any;
@@ -344,6 +345,11 @@ export function GeneratingClassroom({
               <span>Synthesizing chalkboard & voice curriculum...</span>
             </div>
           )}
+        </div>
+
+        {/* Adsterra Native Placement directly below generation box */}
+        <div className="w-full flex justify-center items-center mt-6 pt-2">
+          <AdsterraAd className="max-w-xl" />
         </div>
 
       </div>
