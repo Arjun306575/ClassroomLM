@@ -190,7 +190,7 @@ export function RadialMenu({
         ref={menuRef}
         className="fixed bottom-5 right-5 sm:bottom-8 sm:right-8 z-50 select-none"
       >
-        {/* Visible Google reCAPTCHA Badge neatly placed above the expandable button */}
+        {/* Shortened Google reCAPTCHA Icon Badge neatly placed above the expandable button */}
         <AnimatePresence>
           {!isOpen && (
             <motion.div
@@ -199,45 +199,44 @@ export function RadialMenu({
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               transition={{ duration: 0.2 }}
               data-testid="main-recaptcha-badge"
-              className={`absolute bottom-[calc(100%+12px)] right-0 flex items-center gap-2.5 px-3 py-1.5 rounded-xl border backdrop-blur-md shadow-lg transition-all select-none whitespace-nowrap pointer-events-auto ${
-                isDarkMode 
-                  ? 'bg-slate-900/90 border-slate-700/80 text-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.5)]' 
-                  : 'bg-white/95 border-slate-200 text-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.08)]'
-              }`}
-              title="Protected by Google reCAPTCHA"
+              className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 z-10 pointer-events-auto select-none"
             >
-              <div className="w-5 h-5 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
-                <Shield className="w-3.5 h-3.5" />
-              </div>
-              <div className="flex flex-col text-left">
-                <div className="flex items-center gap-1 font-bold text-[10px] leading-tight">
-                  <span className="text-slate-400 font-normal">protected by</span>
-                  <span className="text-blue-500 font-extrabold tracking-tight">reCAPTCHA</span>
-                </div>
-                <div className="flex items-center gap-1 text-[9px] text-slate-400 font-medium">
-                  <a 
-                    href="https://policies.google.com/privacy" 
-                    target="_blank" 
-                    rel="noreferrer" 
-                    className="hover:underline hover:text-slate-300 transition-colors"
-                  >
-                    Privacy
-                  </a>
-                  <span>·</span>
-                  <a 
-                    href="https://policies.google.com/terms" 
-                    target="_blank" 
-                    rel="noreferrer" 
-                    className="hover:underline hover:text-slate-300 transition-colors"
-                  >
-                    Terms
-                  </a>
-                </div>
-              </div>
-              <div className="ml-0.5 pl-1.5 border-l border-slate-200 dark:border-slate-700/80 flex items-center gap-1 text-[10px] text-emerald-500 font-semibold shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Active</span>
-              </div>
+              <a
+                href="https://www.google.com/recaptcha/about/"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Protected by Google reCAPTCHA"
+                aria-label="Protected by Google reCAPTCHA"
+                className={`relative group flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full border backdrop-blur-md shadow-md transition-all duration-200 hover:scale-110 active:scale-95 ${
+                  isDarkMode 
+                    ? 'bg-slate-900/95 border-slate-700/80 text-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.4)] hover:border-blue-500/50' 
+                    : 'bg-white/95 border-slate-200/90 text-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.08)] hover:border-blue-400'
+                }`}
+              >
+                {/* Official Google reCAPTCHA Icon */}
+                <svg
+                  viewBox="18 15 102 102"
+                  className="w-5 h-5 sm:w-5.5 sm:h-5.5 transition-transform duration-300 group-hover:rotate-45"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m117 62.063c-2e-3 -0.60232-0.0159-1.2014-0.0429-1.7976v-33.991l-9.3971 9.3971c-7.691-9.4141-19.391-15.427-32.496-15.427-13.638 0-25.754 6.5097-33.413 16.591l15.403 15.565c1.5095-2.7917 3.6539-5.1895 6.2395-7.0005 2.6891-2.0985 6.4993-3.8143 11.77-3.8143 0.63674 0 1.1282 0.0744 1.4893 0.21458 6.5304 0.51543 12.191 4.1194 15.524 9.3503l-10.903 10.903c13.81-0.0542 29.411-0.086 35.825 7e-3"
+                    fill="#1c3aa9"
+                  />
+                  <path
+                    d="m74.819 20.246c-0.60232 2e-3 -1.2014 0.0159-1.7976 0.0429h-33.991l9.3971 9.3971c-9.4141 7.691-15.427 19.391-15.427 32.496 0 13.638 6.5098 25.754 16.591 33.413l15.565-15.403c-2.7917-1.5095-5.1895-3.6539-7.0005-6.2395-2.0984-2.6891-3.8143-6.4993-3.8143-11.77 0-0.63674 0.0744-1.1282 0.21458-1.4893 0.51543-6.5304 4.1194-12.191 9.3503-15.524l10.903 10.903c-0.0542-13.81-0.0861-29.411 7e-3 -35.825"
+                    fill="#4285f4"
+                  />
+                  <path
+                    d="m33.002 62.181c2e-3 0.60232 0.0159 1.2014 0.0429 1.7976v33.991l9.3971-9.3971c7.691 9.4141 19.391 15.427 32.496 15.427 13.638 0 25.754-6.5097 33.413-16.591l-15.403-15.565c-1.5095 2.7917-3.6539 5.1895-6.2395 7.0005-2.6891 2.0985-6.4993 3.8143-11.77 3.8143-0.63674 0-1.1282-0.0744-1.4893-0.21458-6.5304-0.51543-12.191-4.1194-15.524-9.3503l10.903-10.903c-13.81 0.0542-29.411 0.086-35.825-7e-3"
+                    fill="#ababab"
+                  />
+                </svg>
+
+                {/* Subtle Active Indicator Dot */}
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+              </a>
             </motion.div>
           )}
         </AnimatePresence>
