@@ -1675,6 +1675,12 @@ function createWavFromPcm(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
       const smoothVal = Math.round(sampleVal * factor);
       cleanPcm.writeInt16LE(Math.max(-32768, Math.min(32767, smoothVal)), byteOffset);
     }
+
+    // Ensure the last 128 PCM samples are absolute 0V to prevent any edge noise
+    const tailZeroCount = Math.min(128, numSamples);
+    for (let i = numSamples - tailZeroCount; i < numSamples; i++) {
+      cleanPcm.writeInt16LE(0, i * 2);
+    }
   }
 
   // 3. Append 100ms of true silence (2400 samples = 4800 zero bytes) so DAC output reaches stable 0V

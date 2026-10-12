@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
-  Send, X, Loader2, Hand, Mic, Globe, 
+  Send, X, Loader2, Hand, Mic, Globe, Lock,
   Library, Maximize2, Minimize2, ChevronLeft, ChevronRight, Volume2,
   Sparkles, Award, BookOpen, ArrowRight, RotateCcw, CheckCircle2, RefreshCw
 } from 'lucide-react';
@@ -12,6 +12,7 @@ import remarkGfm from 'remark-gfm';
 import 'katex/dist/katex.min.css';
 import { PreClassroom } from './PreClassroom';
 import { InteractiveQuiz2D } from './InteractiveQuiz2D';
+import { TeacherMascot2D } from './TeacherMascot2D';
 import { useAuth } from '../firebase/authContext';
 import { QuizQuestion } from '../types';
 
@@ -118,259 +119,8 @@ const ChalkboardEquationSpan = ({ equation }: { equation: string }) => {
   );
 };
 
-/**
- * Buttery smooth robot mouth component:
- * Eliminates lag, unmounting jitter, and audio noise by using direct DOM refs,
- * EMA low-pass filtering, noise gating, and syllabic viseme modulation.
- * Actively moves while the AI teacher is speaking or explaining.
- */
-const SmoothRobotMouth = ({ 
-  isSpeaking, 
-  pose, 
-  analyserRef 
-}: { 
-  isSpeaking: boolean, 
-  pose: string, 
-  analyserRef: React.RefObject<AnalyserNode | null> 
-}) => {
-  const isExplaining = pose === 'explaining' || pose === 'pointing_whiteboard' || pose === 'writing' || pose === 'excitedly' || pose === 'celebrating' || pose === 'talking';
-  const isHappy = pose === 'happy' || pose === 'laughs' || pose === 'celebrating';
-  const isThinking = pose === 'thinks' || pose === 'thinking' || pose === 'curious';
-
-  const isMouthActive = isSpeaking || isExplaining;
-
-  // Direct DOM refs for 60fps locked smooth animation with ZERO React render delays
-  const mouthBoxRef = useRef<HTMLDivElement>(null);
-  const barLeftRef = useRef<HTMLDivElement>(null);
-  const barCenterRef = useRef<HTMLDivElement>(null);
-  const barRightRef = useRef<HTMLDivElement>(null);
-  const smoothedEnergyRef = useRef(0);
-  const timeRef = useRef(0);
-
-  useEffect(() => {
-    let animId: number;
-    let lastTime = performance.now();
-
-    const loop = (now: number) => {
-      const dt = Math.min(0.05, (now - lastTime) / 1000);
-      lastTime = now;
-      timeRef.current += dt;
-
-      let audioEnergy = 0;
-      if (analyserRef.current && isSpeaking) {
-        try {
-          const array = new Uint8Array(analyserRef.current.frequencyBinCount);
-          analyserRef.current.getByteFrequencyData(array);
-          let sum = 0;
-          const count = Math.min(array.length, 32);
-          for (let i = 1; i < count; i++) {
-            sum += array[i];
-          }
-          audioEnergy = sum / (count - 1) / 255;
-        } catch (e) {}
-      }
-
-      let speechEnergy = 0;
-      if (isMouthActive) {
-        if (audioEnergy > 0.02) {
-          speechEnergy = Math.min(1, audioEnergy * 3.2);
-        } else {
-          // Natural speech viseme oscillation (~4.5Hz) with secondary cadence modulation
-          const wave1 = Math.sin(timeRef.current * 22) * 0.5 + 0.5;
-          const wave2 = Math.sin(timeRef.current * 9) * 0.3 + 0.7;
-          speechEnergy = Math.max(0.25, wave1 * wave2);
-        }
-      }
-
-      // Smooth EMA filter: fast attack (opens instantly), smooth natural release (~80ms)
-      const factor = speechEnergy > smoothedEnergyRef.current ? 0.38 : 0.16;
-      smoothedEnergyRef.current += (speechEnergy - smoothedEnergyRef.current) * factor;
-
-      const energy = smoothedEnergyRef.current;
-      const h = Math.round(5 + energy * 15);
-      const w = Math.round(24 + energy * 14);
-
-      if (mouthBoxRef.current) {
-        mouthBoxRef.current.style.height = `${h}px`;
-        mouthBoxRef.current.style.width = `${w}px`;
-      }
-      if (barLeftRef.current) {
-        barLeftRef.current.style.height = `${Math.max(2, Math.round(h * 0.45))}px`;
-      }
-      if (barCenterRef.current) {
-        barCenterRef.current.style.height = `${Math.max(3, Math.round(h * 0.75))}px`;
-      }
-      if (barRightRef.current) {
-        barRightRef.current.style.height = `${Math.max(2, Math.round(h * 0.45))}px`;
-      }
-
-      animId = requestAnimationFrame(loop);
-    };
-
-    animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
-  }, [isMouthActive, isSpeaking, analyserRef]);
-
-  return (
-    <div className="flex items-center justify-center h-6 z-10 w-full select-none">
-      {isMouthActive ? (
-        // Expressive speaking/explaining mouth with smiling open curve
-        <div 
-          ref={mouthBoxRef}
-          className="bg-slate-900 border-2 border-cyan-300 rounded-b-2xl rounded-t-sm flex items-center justify-center overflow-hidden transition-[height,width] duration-75 shadow-[0_0_16px_rgba(34,211,238,1)] relative"
-          style={{ width: '32px', height: '10px' }}
-        >
-          {/* Smiling pink tongue / warm joyful blush inside mouth */}
-          <div className="absolute bottom-0 w-4 h-2.5 bg-pink-400/90 rounded-t-full pointer-events-none" />
-          {/* Internal cyber soundwave bars */}
-          <div className="flex items-center justify-center gap-1 w-full px-1 z-10">
-            <div ref={barLeftRef} className="w-1 bg-cyan-200 rounded-full transition-all duration-75" style={{ height: '3px' }} />
-            <div ref={barCenterRef} className="w-1.5 bg-white rounded-full transition-all duration-75" style={{ height: '6px' }} />
-            <div ref={barRightRef} className="w-1 bg-cyan-200 rounded-full transition-all duration-75" style={{ height: '3px' }} />
-          </div>
-        </div>
-      ) : (
-        // Bright, friendly, charming neon smile in the lesson!
-        <svg width="40" height="20" viewBox="0 0 40 20" className="overflow-visible">
-          {/* Cheerful upward smile curve */}
-          <path 
-            d="M 5 5 Q 20 20 35 5" 
-            fill="none" 
-            stroke="#22d3ee" 
-            strokeWidth="3.5" 
-            strokeLinecap="round" 
-            className="filter drop-shadow-[0_0_10px_rgba(34,211,238,1)]"
-          />
-          {/* Cute smiling dimple corner dots */}
-          <circle cx="5" cy="5" r="2" fill="#a5f3fc" />
-          <circle cx="35" cy="5" r="2" fill="#a5f3fc" />
-        </svg>
-      )}
-    </div>
-  );
-};
-
-const Mascot2D = ({ 
-  pose = 'happy', 
-  isSpeaking, 
-  analyserRef 
-}: { 
-  pose?: string, 
-  isSpeaking: boolean, 
-  analyserRef: React.RefObject<AnalyserNode | null> 
-}) => {
-  const isCurious = pose === 'curious' || pose === 'thoughtfully';
-  const isThinking = pose === 'thinks' || pose === 'thinking';
-
-  const [isBlinking, setIsBlinking] = useState(false);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIsBlinking(true);
-      setTimeout(() => setIsBlinking(false), 150);
-    }, 3200);
-    return () => clearInterval(interval);
-  }, []);
-
-  const eyeScale = isBlinking ? 0.15 : 1;
-
-  return (
-    <motion.div 
-      animate={{ y: [0, -10, 0] }}
-      transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
-      className="relative flex flex-col items-center justify-end h-full pb-4"
-    >
-      {/* Robot Mascot Head */}
-      <div className="w-40 md:w-48 h-36 md:h-40 bg-slate-200 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl border-b-8 border-slate-300 flex flex-col items-center justify-center relative overflow-hidden z-20">
-        
-        {/* Antennas */}
-        <div className="absolute -top-3 w-3 h-4 bg-slate-400 rounded-full" />
-        <div className="absolute -top-5 w-5 h-5 bg-indigo-500 rounded-full animate-ping opacity-60" />
-        <div className="absolute -top-5 w-5 h-5 bg-indigo-600 rounded-full" />
-
-        {/* Visor Screen */}
-        <div className="w-[86%] h-[74%] bg-slate-950 rounded-[2rem] border-2 border-indigo-500/40 flex flex-col items-center justify-center p-3 relative shadow-[inset_0_0_20px_rgba(99,102,241,0.5)]">
-          {/* Subtle Grid on Visor */}
-          <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:8px_8px] pointer-events-none rounded-[2rem]" />
-
-          {/* Cheerful Joyful Smiling Eyes container */}
-          <div className="flex items-center justify-center gap-6 z-10 w-full">
-            {/* Left Smiling Eye with warm upward crescent and gleam */}
-            <motion.div 
-              animate={{ 
-                scaleY: eyeScale, 
-                rotate: isCurious ? -6 : (isThinking ? 4 : 0),
-                y: isThinking ? -2 : 0
-              }}
-              className="w-8 md:w-9 h-8 md:h-9 relative flex items-center justify-center"
-            >
-              <svg viewBox="0 0 36 36" className="w-full h-full overflow-visible drop-shadow-[0_0_12px_rgba(34,211,238,1)]">
-                {/* Cheerful upward-curved smiling eye */}
-                <path 
-                  d="M 5 22 Q 18 8 31 22" 
-                  fill="none" 
-                  stroke="#22d3ee" 
-                  strokeWidth="4.5" 
-                  strokeLinecap="round" 
-                />
-                {/* Cheerful warm sparkle highlights */}
-                <circle cx="18" cy="11" r="2.2" fill="#ffffff" />
-                <circle cx="25" cy="15" r="1.5" fill="#ffffff" />
-              </svg>
-            </motion.div>
-
-            {/* Right Smiling Eye with warm upward crescent and gleam */}
-            <motion.div 
-              animate={{ 
-                scaleY: eyeScale,
-                rotate: isCurious ? 6 : (isThinking ? -4 : 0),
-                y: isThinking ? -2 : 0
-              }}
-              className="w-8 md:w-9 h-8 md:h-9 relative flex items-center justify-center"
-            >
-              <svg viewBox="0 0 36 36" className="w-full h-full overflow-visible drop-shadow-[0_0_12px_rgba(34,211,238,1)]">
-                {/* Cheerful upward-curved smiling eye */}
-                <path 
-                  d="M 5 22 Q 18 8 31 22" 
-                  fill="none" 
-                  stroke="#22d3ee" 
-                  strokeWidth="4.5" 
-                  strokeLinecap="round" 
-                />
-                {/* Cheerful warm sparkle highlights */}
-                <circle cx="18" cy="11" r="2.2" fill="#ffffff" />
-                <circle cx="11" cy="15" r="1.5" fill="#ffffff" />
-              </svg>
-            </motion.div>
-          </div>
-
-          {/* Smooth Expressive Animated Smile Mouth */}
-          <div className="mt-3 w-full">
-            <SmoothRobotMouth isSpeaking={isSpeaking} pose={pose} analyserRef={analyserRef} />
-          </div>
-        </div>
-
-        {/* Cheerful Rosy Blushing Cheeks */}
-        <div className="absolute bottom-2.5 left-3 w-6 h-3 bg-pink-400/80 rounded-full blur-[1px] shadow-[0_0_12px_rgba(244,114,182,0.95)]" />
-        <div className="absolute bottom-2.5 right-3 w-6 h-3 bg-pink-400/80 rounded-full blur-[1px] shadow-[0_0_12px_rgba(244,114,182,0.95)]" />
-      </div>
-
-      {/* Robot Torso / Body */}
-      <div className="w-28 md:w-32 h-20 bg-slate-300 rounded-t-[2rem] -mt-2 border-t-4 border-slate-400 flex flex-col items-center pt-3 relative z-10 shadow-lg">
-        {/* Core Heart Reactor */}
-        <motion.div 
-          animate={{ scale: [1, 1.15, 1], opacity: [0.8, 1, 0.8] }}
-          transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-          className="w-6 h-6 rounded-full bg-cyan-400 shadow-[0_0_16px_rgba(34,211,238,0.9)] border-2 border-white flex items-center justify-center"
-        >
-          <div className="w-2 h-2 bg-white rounded-full" />
-        </motion.div>
-
-        {/* Tie / Teacher Badge */}
-        <div className="w-3 h-5 bg-indigo-600 rounded-b-md mt-1 shadow-sm" />
-      </div>
-    </motion.div>
-  );
-};
+// 2D AI Teacher Mascot is now modularly implemented in TeacherMascot2D
+const Mascot2D = TeacherMascot2D;
 
 interface Blackboard2DProps {
   heading: string;
@@ -599,9 +349,22 @@ export function LiveClassroom({
   onPreClassEnter, 
   isDarkMode = true 
 }: LiveClassroomProps) {
-  const { getIdToken } = useAuth();
+  const { getIdToken, currentUser, openAuthModal } = useAuth();
   const [isReady, setIsReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const isDemo = Boolean(lessonData?.isDemoLesson);
+  const [demoPromptMessage, setDemoPromptMessage] = useState<string | null>(null);
+  const demoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerDemoRestriction = useCallback(() => {
+    if (demoTimeoutRef.current) {
+      clearTimeout(demoTimeoutRef.current);
+    }
+    setDemoPromptMessage("Please sign in to use this feature");
+    demoTimeoutRef.current = setTimeout(() => {
+      setDemoPromptMessage(null);
+    }, 4500);
+  }, []);
 
   // Lesson timeline state
   const [timeline, setTimeline] = useState<any[]>([]);
@@ -783,6 +546,32 @@ export function LiveClassroom({
       const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
       if (!isMountedRef.current) return;
 
+      // Clean Audio PCM Smoothing: eliminate clicks, pops, and end-of-speech noise
+      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+        const channelData = audioBuffer.getChannelData(ch);
+        const totalSamples = channelData.length;
+
+        // 1. Smooth 10ms fade-in
+        const fadeInSamples = Math.min(Math.floor(audioBuffer.sampleRate * 0.01), Math.floor(totalSamples * 0.05));
+        for (let i = 0; i < fadeInSamples; i++) {
+          channelData[i] *= (i / fadeInSamples);
+        }
+
+        // 2. Smooth 80ms cosine taper fade-out at the tail of the buffer
+        const fadeOutSamples = Math.min(Math.floor(audioBuffer.sampleRate * 0.08), Math.floor(totalSamples * 0.2));
+        for (let i = 0; i < fadeOutSamples; i++) {
+          const idx = totalSamples - fadeOutSamples + i;
+          const factor = 0.5 * (1 + Math.cos((Math.PI * i) / fadeOutSamples));
+          channelData[idx] *= factor;
+        }
+
+        // 3. Guarantee last 256 samples are strictly zero
+        const zeroSamples = Math.min(256, totalSamples);
+        for (let i = totalSamples - zeroSamples; i < totalSamples; i++) {
+          channelData[i] = 0;
+        }
+      }
+
       if (!analyserRef.current) {
         analyserRef.current = ctx.createAnalyser();
         analyserRef.current.fftSize = 256;
@@ -812,10 +601,11 @@ export function LiveClassroom({
 
       // Anti-cracking GainNode envelope: smooth gentle fade-out at end of audio buffer
       const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(1, ctx.currentTime);
-      const fadeOutTime = Math.max(0, audioBuffer.duration - 0.08);
-      gainNode.gain.setValueAtTime(1, ctx.currentTime + fadeOutTime);
-      gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + audioBuffer.duration);
+      const startTime = ctx.currentTime;
+      gainNode.gain.setValueAtTime(1, startTime);
+      const fadeOutTime = Math.max(0, audioBuffer.duration - 0.1);
+      gainNode.gain.setValueAtTime(1, startTime + fadeOutTime);
+      gainNode.gain.linearRampToValueAtTime(0, startTime + audioBuffer.duration);
 
       source.connect(gainNode);
       gainNode.connect(ctx.destination);
@@ -825,6 +615,10 @@ export function LiveClassroom({
       currentGainNodeRef.current = gainNode;
 
       source.onended = () => {
+        try {
+          source.disconnect();
+          gainNode.disconnect();
+        } catch (e) {}
         if (isMountedRef.current) {
           setMascotPose('neutral');
           setIsSpeaking(false);
@@ -1080,12 +874,12 @@ export function LiveClassroom({
         lessonData?.type === 'lesson'
       );
 
-      if (isFromSaved || (existingTimeline && Array.isArray(existingTimeline) && existingTimeline.length > 0)) {
-        // STRICT REQUIREMENT: If loaded from Saved Content, NEVER GENERATE AGAIN!
+      if (isDemo || isFromSaved || (existingTimeline && Array.isArray(existingTimeline) && existingTimeline.length > 0)) {
+        // STRICT REQUIREMENT: If loaded from Demo or Saved Content, NEVER GENERATE AGAIN!
         // Immediately load the saved timeline into state and display slide 1
         const timelineToUse = (existingTimeline && Array.isArray(existingTimeline) && existingTimeline.length > 0)
           ? existingTimeline
-          : [
+          : (lessonData?.timeline || [
               {
                 timestamp: "Slide 1: Overview & Review",
                 teacherGesture: "happy",
@@ -1101,15 +895,19 @@ export function LiveClassroom({
                   diagramType: "none"
                 }
               }
-            ];
+            ]);
 
         setTimeline(timelineToUse);
         setCurrentStepIndex(0);
         await applyTimelineStep(timelineToUse[0], 0, timelineToUse.length);
 
-        // CRITICAL: Fresh Quiz Generation for Saved Lessons!
-        // "the quiz should be generated again freshly whenever the user plays the saved lesson."
-        fetchFreshQuiz(timelineToUse);
+        // If Demo lesson, use permanent interactive quiz tied to lesson directly (0ms latency, no API call)
+        if (isDemo && Array.isArray(lessonData?.quiz) && lessonData.quiz.length > 0) {
+          setQuizQuestions(lessonData.quiz);
+        } else {
+          // Fresh Quiz Generation for regular Saved Lessons
+          fetchFreshQuiz(timelineToUse);
+        }
         return;
       }
 
@@ -1274,6 +1072,10 @@ export function LiveClassroom({
   // Student asking a doubt
   const submitQuestionText = async (doubtQuestion: string) => {
     if (!doubtQuestion.trim()) return;
+    if (isDemo && !currentUser) {
+      triggerDemoRestriction();
+      return;
+    }
     clearCaptionTimers();
     setIsAnsweringDoubt(true);
     setAskText("");
@@ -1340,11 +1142,19 @@ export function LiveClassroom({
 
   const submitQuestion = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemo && !currentUser) {
+      triggerDemoRestriction();
+      return;
+    }
     submitQuestionText(askText);
   };
 
   // Raise hand to speak a question
   const handleRaiseHand = async () => {
+    if (isDemo && !currentUser) {
+      triggerDemoRestriction();
+      return;
+    }
     if (isListening) return;
     setIsListening(true);
     setCaptionLine("[curious] Yes, what's your question?");
@@ -1593,19 +1403,19 @@ export function LiveClassroom({
             </section>
           </main>
 
-          {/* COMPACT LINE-BY-LINE CAPTIONS */}
-          <div className="w-full flex justify-center px-4 -mb-1 z-30 pointer-events-none">
+          {/* DEDICATED LIVE SUBTITLES HUD - AMPLE VERTICAL SPACING PREVENTS ANY COLLISION WITH BOTTOM ACTION BAR */}
+          <div className="w-full flex justify-center px-4 pt-1 sm:pt-2 pb-3.5 sm:pb-4 mb-2 sm:mb-3 z-30 pointer-events-none shrink-0">
             <AnimatePresence mode="wait">
               {captionLine && (
                 <motion.div 
                   key={captionLine}
-                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.2 }}
-                  className="max-w-2xl pointer-events-auto px-5 py-2 bg-slate-950/95 backdrop-blur-md rounded-2xl border border-cyan-500/30 shadow-2xl flex items-center justify-center text-center"
+                  className="max-w-2xl sm:max-w-3xl pointer-events-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-950/95 backdrop-blur-xl rounded-2xl border border-cyan-500/40 shadow-[0_12px_35px_rgba(0,0,0,0.9)] flex items-center justify-center text-center ring-1 ring-cyan-500/20"
                 >
-                  <p className="text-xs md:text-sm font-medium text-white/95 leading-snug line-clamp-1 truncate">
+                  <p className="text-xs sm:text-sm font-medium text-white/95 leading-relaxed tracking-wide text-center line-clamp-2">
                     {captionLine}
                   </p>
                 </motion.div>
@@ -1613,8 +1423,51 @@ export function LiveClassroom({
             </AnimatePresence>
           </div>
 
+          {/* Non-intrusive Demo Mode Toast Notification */}
+          <AnimatePresence>
+            {demoPromptMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 14, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 14, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="fixed bottom-28 sm:bottom-32 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-slate-900/95 border border-amber-500/60 text-white shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-2xl pointer-events-auto max-w-[92vw]"
+              >
+                <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 shrink-0">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-xs sm:text-sm font-bold text-slate-100">
+                    {demoPromptMessage}
+                  </span>
+                  <span className="text-[10px] sm:text-[11px] text-slate-400">
+                    Live doubts and interactive voice Q&A require signing in.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDemoPromptMessage(null);
+                    openAuthModal("Please sign in to use this feature");
+                  }}
+                  className="ml-1 sm:ml-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 shrink-0"
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDemoPromptMessage(null)}
+                  className="p-1 rounded-full text-slate-400 hover:text-white transition-colors shrink-0"
+                  title="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* DOCKED BOTTOM CONTROL BAR: Raise Hand, Doubt Box, Slide Navigation, Replay */}
-          <footer className="w-full bg-slate-900/95 border-t border-slate-800 backdrop-blur-xl px-4 md:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 z-40 shrink-0 shadow-2xl">
+          <footer className="relative w-full bg-slate-900/95 border-t border-slate-800 backdrop-blur-xl px-3 sm:px-6 py-2 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 z-40 shrink-0 shadow-[0_-10px_35px_rgba(0,0,0,0.5)]">
             
             {/* Left Action Buttons: Raise Hand & Replay Voice */}
             <div className="flex items-center gap-2 md:gap-3 shrink-0">
@@ -1622,7 +1475,7 @@ export function LiveClassroom({
               <button
                 type="button"
                 onClick={handleRaiseHand}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs md:text-sm transition-all shadow-lg active:scale-95 ${
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full font-bold text-xs md:text-sm transition-all shadow-lg active:scale-95 ${
                   isListening
                     ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse ring-4 ring-amber-500/30'
                     : 'bg-indigo-600 hover:bg-indigo-500 text-white'
@@ -1647,20 +1500,61 @@ export function LiveClassroom({
               </button>
             </div>
 
-            {/* Center: Ask Question / Doubt Input Bar */}
-            <form onSubmit={submitQuestion} className="flex-1 max-w-xl min-w-[220px] relative">
+            {/* Center: Ask Question / Doubt Input Bar (Spans full width on mobile phones to prevent congestion) */}
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (isDemo && !currentUser) {
+                  triggerDemoRestriction();
+                  return;
+                }
+                submitQuestion(e);
+              }} 
+              className="w-full sm:w-auto sm:flex-1 max-w-xl min-w-0 sm:min-w-[220px] order-last sm:order-none relative"
+            >
               <input 
                 type="text"
                 value={askText}
-                onChange={(e) => setAskText(e.target.value)}
+                onFocus={(e) => {
+                  if (isDemo && !currentUser) {
+                    e.preventDefault();
+                    e.target.blur();
+                    triggerDemoRestriction();
+                  }
+                }}
+                onClick={(e) => {
+                  if (isDemo && !currentUser) {
+                    e.preventDefault();
+                    triggerDemoRestriction();
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (isDemo && !currentUser) {
+                    e.preventDefault();
+                    triggerDemoRestriction();
+                  }
+                }}
+                onChange={(e) => {
+                  if (isDemo && !currentUser) {
+                    triggerDemoRestriction();
+                    return;
+                  }
+                  setAskText(e.target.value);
+                }}
                 placeholder="Ask any question or doubt about this slide..."
                 disabled={isAnsweringDoubt}
                 className="w-full bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-full px-5 py-2.5 pr-12 text-xs md:text-sm text-white placeholder-slate-400 focus:outline-none transition-all shadow-inner disabled:opacity-50"
               />
-              <button
-                type="submit"
-                disabled={!askText.trim() || isAnsweringDoubt}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-full transition-colors"
+              <button 
+                type="submit" 
+                onClick={(e) => {
+                  if (isDemo && !currentUser) {
+                    e.preventDefault();
+                    triggerDemoRestriction();
+                  }
+                }}
+                disabled={(!askText.trim() && !(isDemo && !currentUser)) || isAnsweringDoubt}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-full transition-colors cursor-pointer"
                 title="Send Question"
               >
                 {isAnsweringDoubt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}

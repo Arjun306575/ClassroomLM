@@ -6,6 +6,7 @@ export interface WhiteboardContent {
   mathEquation?: string;
   drawCommands?: any[];
   imageUrl?: string;
+  imageCaption?: string;
 }
 
 export interface TimelineStep {

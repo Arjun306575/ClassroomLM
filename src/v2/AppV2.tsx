@@ -5,6 +5,8 @@ import { GeneratingClassroom } from './GeneratingClassroom';
 import { LiveClassroom } from './LiveClassroom';
 import { useAuth } from '../firebase/authContext';
 
+import { photosynthesisLesson } from '../data/sampleLessons/photosynthesis';
+
 type ViewState = 'landing' | 'generating' | 'live-class';
 
 export default function AppV2() {
@@ -286,26 +288,33 @@ export default function AppV2() {
       ];
     }
 
+    const isDemo = Boolean(lesson?.isDemoLesson);
     const loadedLesson = {
       ...lesson,
       id: lesson?.id || Date.now().toString(),
-      title: lesson?.title || "Saved Lesson",
+      title: lesson?.title || (isDemo ? "Photosynthesis: Energy from Sunlight" : "Saved Lesson"),
       timeline,
+      isDemoLesson: isDemo,
       isLoadedFromSaved: true,
       loadedFromSaved: true,
-      quiz: [], // Strictly reset to empty array so LiveClassroom generates fresh questions on every play!
+      quiz: isDemo && Array.isArray(lesson?.quiz) && lesson.quiz.length > 0 ? lesson.quiz : [],
       data: {
         ...(lesson?.data || {}),
         timeline,
+        isDemoLesson: isDemo,
         isLoadedFromSaved: true,
         loadedFromSaved: true,
-        quiz: [],
+        quiz: isDemo && Array.isArray(lesson?.quiz) && lesson.quiz.length > 0 ? lesson.quiz : [],
         config: lesson?.config || lesson?.data?.config || {}
       }
     };
 
     setActiveLesson(loadedLesson);
     setViewState('live-class');
+  };
+
+  const handleLoadDemoLesson = () => {
+    handleLoadLesson(photosynthesisLesson);
   };
 
   const handleDeleteSavedLesson = (id: string) => {
@@ -363,6 +372,7 @@ export default function AppV2() {
               onSaveSearch={handleSaveSearch}
               savedLessons={combinedSavedLessons}
               onLoadLesson={handleLoadLesson}
+              onLoadDemoLesson={handleLoadDemoLesson}
               onDeleteLesson={handleDeleteSavedLesson}
               isDarkMode={isDarkMode}
               toggleTheme={toggleTheme}

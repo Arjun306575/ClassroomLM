@@ -120,9 +120,12 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
 
     const scene = new THREE.Scene();
 
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-    camera.position.set(0, 0.08, 6.7);
-    camera.lookAt(0, 0.02, 0);
+    // Centered at visual midpoint (y = -0.28) with generous distance so bottom orbit & ground halo never cut off
+    camera.position.set(0, -0.28, isMobile ? 9.2 : 8.15);
+    camera.lookAt(0, -0.28, 0);
 
     const renderer = new THREE.WebGLRenderer({
       alpha: true,
@@ -131,7 +134,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       precision: 'mediump',
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.15 : 1.6));
     renderer.setClearColor(0x000000, 0); // 100% Transparent background
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -365,25 +368,28 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       canvas.height = 512;
       const ctx = canvas.getContext('2d')!;
 
-      // Deep, highly saturated background gradient
+      // Deep, highly saturated background gradient with smooth rounded corners
+      ctx.clearRect(0, 0, 512, 512);
       const bgGrad = ctx.createLinearGradient(0, 0, 0, 512);
       bgGrad.addColorStop(0, topColor);
       bgGrad.addColorStop(1, bottomColor);
       ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, 512, 512);
+      drawRoundedRect(ctx, 10, 10, 492, 492, 85);
+      ctx.fill();
 
       // Subtle soft ambient vignette
       const radGrad = ctx.createRadialGradient(256, 256, 100, 256, 256, 340);
-      radGrad.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+      radGrad.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
       radGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0)');
-      radGrad.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
+      radGrad.addColorStop(1, 'rgba(0, 0, 0, 0.18)');
       ctx.fillStyle = radGrad;
-      ctx.fillRect(0, 0, 512, 512);
+      drawRoundedRect(ctx, 10, 10, 492, 492, 85);
+      ctx.fill();
 
-      // Crisp high-contrast border
+      // Crisp high-contrast smooth rounded border
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.lineWidth = 11;
-      drawRoundedRect(ctx, 21, 21, 470, 470, 55);
+      ctx.lineWidth = 14;
+      drawRoundedRect(ctx, 18, 18, 476, 476, 78);
       ctx.stroke();
 
       // Bold pure white vector icon
@@ -506,73 +512,106 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       return tex;
     };
 
-    // Generator for Smart Tablet Screen
+    // Generator for Smart Tab / Book Cover with prominent Graduation Cap icon
     const createTabletTexture = (): THREE.CanvasTexture => {
       const canvas = document.createElement('canvas');
       canvas.width = 512;
       canvas.height = 680;
       const ctx = canvas.getContext('2d')!;
 
+      // Rich royal blue to deep sapphire gradient
       const grad = ctx.createLinearGradient(0, 0, 512, 680);
       grad.addColorStop(0, '#0284c7');
-      grad.addColorStop(0.35, '#2563eb');
-      grad.addColorStop(0.7, '#7c3aed');
-      grad.addColorStop(1, '#9333ea');
+      grad.addColorStop(0.3, '#1d4ed8');
+      grad.addColorStop(0.7, '#1e3a8a');
+      grad.addColorStop(1, '#0f172a');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 512, 680);
 
+      // Outer border / rim
       ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 12;
-      drawRoundedRect(ctx, 20, 20, 472, 640, 40);
+      ctx.lineWidth = 14;
+      drawRoundedRect(ctx, 18, 18, 476, 644, 42);
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.fillText('ClassroomLM · Interactive AI', 40, 70);
-
-      // Clean White Embossed Graduation Cap in center
+      // Top Header Wordmark
       ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#ffffff';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ClassroomLM', 256, 75);
 
-      // Cap Diamond
+      ctx.fillStyle = 'rgba(165, 243, 252, 0.9)';
+      ctx.font = '600 16px sans-serif';
+      ctx.fillText('Interactive AI Study', 256, 106);
+
+      // LARGE, PROMINENT EMBOSSED GRADUATION CAP ICON (in center)
+      const capY = 320;
+      
+      // Radiant Gold Trim on Cap Diamond
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 14;
       ctx.beginPath();
-      ctx.moveTo(256, 230);
-      ctx.lineTo(405, 300);
-      ctx.lineTo(256, 370);
-      ctx.lineTo(107, 300);
+      ctx.moveTo(256, capY - 100);
+      ctx.lineTo(440, capY - 12);
+      ctx.lineTo(256, capY + 76);
+      ctx.lineTo(72, capY - 12);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Diamond Plane Fill
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(256, capY - 100);
+      ctx.lineTo(440, capY - 12);
+      ctx.lineTo(256, capY + 76);
+      ctx.lineTo(72, capY - 12);
       ctx.closePath();
       ctx.fill();
 
-      // Cap Skull
+      // Cap Dome Skull base
+      ctx.fillStyle = '#1e3a8a';
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 8;
       ctx.beginPath();
-      ctx.moveTo(170, 345);
-      ctx.quadraticCurveTo(256, 435, 342, 345);
-      ctx.lineTo(342, 385);
-      ctx.quadraticCurveTo(256, 475, 170, 385);
+      ctx.moveTo(150, capY + 45);
+      ctx.quadraticCurveTo(256, capY + 165, 362, capY + 45);
+      ctx.lineTo(362, capY + 88);
+      ctx.quadraticCurveTo(256, capY + 208, 150, capY + 88);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
 
-      // Cap Tassel
+      // Gold Center Button
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(256, capY - 12, 18, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Purple Graduation Tassel
+      ctx.strokeStyle = '#c084fc';
       ctx.lineWidth = 14;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(256, 300);
-      ctx.lineTo(405, 365);
-      ctx.lineTo(405, 430);
+      ctx.moveTo(256, capY - 12);
+      ctx.quadraticCurveTo(395, capY + 50, 425, capY + 145);
       ctx.stroke();
 
+      // Tassel fringe ornament
+      ctx.fillStyle = '#a855f7';
       ctx.beginPath();
-      ctx.arc(405, 442, 18, 0, Math.PI * 2);
+      ctx.arc(425, capY + 160, 22, 0, Math.PI * 2);
       ctx.fill();
 
-      // Lower progress bar
+      // Lower Decorative Progress Bar
       ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      drawRoundedRect(ctx, 60, 570, 392, 16, 8);
+      drawRoundedRect(ctx, 60, 580, 392, 16, 8);
       ctx.fill();
 
       ctx.fillStyle = '#38bdf8';
-      drawRoundedRect(ctx, 60, 570, 310, 16, 8);
+      drawRoundedRect(ctx, 60, 580, 290, 16, 8);
       ctx.fill();
+
+      ctx.textAlign = 'left';
 
       const tex = new THREE.CanvasTexture(canvas);
       tex.colorSpace = THREE.SRGBColorSpace;
@@ -862,54 +901,61 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     bodyGroup.add(thrusterInnerMesh);
 
     // =========================================================================
-    // LAYER 3: CONTINUOUS ARMS & SMART TABLET WITH HOLOGRAPHIC 3D ATOM
+    // LAYER 3: CONTINUOUS ARMS & SMART BOOK/TAB (SMOOTH & FULLY VISIBLE)
     // =========================================================================
-    // LEFT ARM (holding tablet)
+    // LEFT ARM (Smooth continuous robotic arm holding the smart book/tablet)
     const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(-0.54, 0.06, 0);
+    leftArmGroup.position.set(-0.54, 0.04, 0);
     bodyGroup.add(leftArmGroup);
 
-    const shoulderLGeom = new THREE.SphereGeometry(0.16, 18, 18);
+    // Shoulder ball joint
+    const shoulderLGeom = new THREE.SphereGeometry(0.15, 18, 18);
     const shoulderLMesh = new THREE.Mesh(shoulderLGeom, glossyWhiteMat);
     leftArmGroup.add(shoulderLMesh);
 
-    const bicepLGeom = new THREE.CapsuleGeometry(0.09, 0.28, 14, 14);
+    // Bicep (upper arm): continuous, extends down-outward-forward to the elbow
+    const bicepLGeom = new THREE.CapsuleGeometry(0.085, 0.26, 14, 14);
     const bicepLMesh = new THREE.Mesh(bicepLGeom, glossyWhiteMat);
-    bicepLMesh.position.set(-0.10, -0.16, 0.16);
-    bicepLMesh.rotation.set(0.68, -0.15, 0.18);
+    bicepLMesh.position.set(-0.09, -0.13, 0.06);
+    bicepLMesh.rotation.set(0.38, 0.12, 0.44);
     leftArmGroup.add(bicepLMesh);
 
-    const elbowLGeom = new THREE.SphereGeometry(0.095, 14, 14);
+    // Elbow ball joint
+    const elbowLGeom = new THREE.SphereGeometry(0.09, 14, 14);
     const elbowLMesh = new THREE.Mesh(elbowLGeom, silverMetalMat);
-    elbowLMesh.position.set(-0.16, -0.32, 0.32);
+    elbowLMesh.position.set(-0.16, -0.24, 0.12);
     leftArmGroup.add(elbowLMesh);
 
-    const forearmLGeom = new THREE.CapsuleGeometry(0.085, 0.34, 14, 14);
+    // Forearm (lower arm): extends smoothly from elbow to hand
+    const forearmLGeom = new THREE.CapsuleGeometry(0.08, 0.28, 14, 14);
     const forearmLMesh = new THREE.Mesh(forearmLGeom, glossyWhiteMat);
-    forearmLMesh.position.set(-0.06, -0.32, 0.58);
-    forearmLMesh.rotation.set(0.85, -0.22, -0.16);
+    forearmLMesh.position.set(-0.17, -0.26, 0.22);
+    forearmLMesh.rotation.set(0.85, 0.08, 0.0);
     leftArmGroup.add(forearmLMesh);
 
+    // Hand wrist and palm: holds the tablet firmly at the side
     const handLGroup = new THREE.Group();
-    handLGroup.position.set(-0.02, -0.30, 0.78);
+    handLGroup.position.set(-0.18, -0.25, 0.32);
     leftArmGroup.add(handLGroup);
 
-    const handLGeom = new THREE.SphereGeometry(0.09, 14, 14);
+    const handLGeom = new THREE.SphereGeometry(0.085, 14, 14);
     const handLMesh = new THREE.Mesh(handLGeom, glossyWhiteMat);
     handLGroup.add(handLMesh);
 
-    [-0.04, 0, 0.04].forEach((offsetY) => {
-      const fingerGeom = new THREE.CapsuleGeometry(0.025, 0.09, 10, 10);
+    // Cute robotic fingers gently clasping the edge of the book cover
+    [-0.035, 0, 0.035].forEach((offsetY) => {
+      const fingerGeom = new THREE.CapsuleGeometry(0.022, 0.07, 10, 10);
       const fingerMesh = new THREE.Mesh(fingerGeom, glossyWhiteMat);
-      fingerMesh.position.set(0.07, offsetY, 0.04);
-      fingerMesh.rotation.set(0.3, 0.5, 0.4);
+      fingerMesh.position.set(0.02, offsetY, 0.04);
+      fingerMesh.rotation.set(0.2, 0.3, 0.15);
       handLGroup.add(fingerMesh);
     });
 
-    // SMART TABLET
+    // SMART TAB / BOOK (Positioned clearly outside body at the mascot's flank, graduation cap 100% visible facing camera)
     const tabletGroup = new THREE.Group();
-    tabletGroup.position.set(-0.52, -0.18, 0.88);
-    tabletGroup.rotation.set(-0.28, 0.36, -0.12);
+    tabletGroup.position.set(-0.74, -0.20, 0.28);
+    tabletGroup.rotation.set(0.10, 0.32, -0.10);
+    tabletGroup.scale.set(0.88, 0.88, 0.88);
     mascotRoot.add(tabletGroup);
 
     const tabletTexture = createTabletTexture();
@@ -926,37 +972,14 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       silverMetalMat,  // -X
       silverMetalMat,  // +Y
       silverMetalMat,  // -Y
-      tabletScreenMat, // +Z (FRONT SCREEN)
+      tabletScreenMat, // +Z (FRONT COVER WITH GRADUATION CAP ICON)
       silverMetalMat,  // -Z
     ];
 
-    const tabletGeom = new THREE.BoxGeometry(0.72, 0.98, 0.04);
+    const tabletGeom = new THREE.BoxGeometry(0.68, 0.94, 0.06);
     const tabletMesh = new THREE.Mesh(tabletGeom, tabletMaterials);
     tabletMesh.castShadow = true;
     tabletGroup.add(tabletMesh);
-
-    // MINI 3D HOLOGRAPHIC ATOM ABOVE TABLET
-    const miniAtomGroup = new THREE.Group();
-    miniAtomGroup.position.set(0, 0.05, 0.16);
-    tabletGroup.add(miniAtomGroup);
-
-    const miniNucleus = new THREE.Mesh(
-      new THREE.SphereGeometry(0.044, 14, 14),
-      new THREE.MeshStandardMaterial({
-        color: 0xf59e0b,
-        emissive: new THREE.Color(0xf59e0b),
-        emissiveIntensity: 0.85,
-      })
-    );
-    miniAtomGroup.add(miniNucleus);
-
-    const miniRingMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
-    const miniRing1 = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.006, 6, 20), miniRingMat);
-    const miniRing2 = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.006, 6, 20), miniRingMat);
-    miniRing2.rotation.x = Math.PI / 2.3;
-    miniRing2.rotation.y = Math.PI / 4;
-    miniAtomGroup.add(miniRing1);
-    miniAtomGroup.add(miniRing2);
 
     // RIGHT ARM (holding pointer stylus)
     const rightArmGroup = new THREE.Group();
@@ -1050,47 +1073,94 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     // =========================================================================
     // LAYER 5: DUAL GYROSCOPE ORBIT RINGS & GROUND HALO (NO FLOATING DOTS/BEADS)
     // =========================================================================
+    // LAYER 5: DUAL GYROSCOPE ORBIT RINGS & GROUND HALO (PROPORTIONED TO NEVER CLIP)
+    // =========================================================================
     const gyroGroup = new THREE.Group();
     mascotRoot.add(gyroGroup);
 
-    // Ring 1 (Cyan)
-    const gyroRing1Geom = new THREE.TorusGeometry(2.35, 0.024, 12, 64);
+    // Ring 1 (Cyan) - Proportioned cleanly to stay comfortably within camera viewport
+    const gyroRing1Geom = new THREE.TorusGeometry(2.15, 0.024, 12, 64);
     const gyroRing1Mat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.52,
     });
     const gyroRing1 = new THREE.Mesh(gyroRing1Geom, gyroRing1Mat);
-    gyroRing1.rotation.x = Math.PI / 3.1;
+    gyroRing1.rotation.x = Math.PI / 3.2;
     gyroRing1.rotation.y = 0.2;
     gyroGroup.add(gyroRing1);
 
-    // Ring 2 (Purple)
-    const gyroRing2Geom = new THREE.TorusGeometry(2.55, 0.020, 12, 64);
+    // Ring 2 (Purple) - Proportioned cleanly to stay comfortably within camera viewport
+    const gyroRing2Geom = new THREE.TorusGeometry(2.28, 0.020, 12, 64);
     const gyroRing2Mat = new THREE.MeshBasicMaterial({
       color: 0xd946ef,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.48,
     });
     const gyroRing2 = new THREE.Mesh(gyroRing2Geom, gyroRing2Mat);
-    gyroRing2.rotation.x = -Math.PI / 3.8;
+    gyroRing2.rotation.x = -Math.PI / 3.9;
     gyroRing2.rotation.y = -0.3;
     gyroGroup.add(gyroRing2);
 
     // Ground Neon Halo
-    const groundHaloGeom = new THREE.TorusGeometry(0.74, 0.028, 12, 48);
+    const groundHaloGeom = new THREE.TorusGeometry(0.72, 0.026, 12, 48);
     const groundHaloMesh = new THREE.Mesh(groundHaloGeom, new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
     }));
-    groundHaloMesh.position.y = -1.62;
+    groundHaloMesh.position.y = -1.55;
     groundHaloMesh.rotation.x = Math.PI / 2;
     scene.add(groundHaloMesh);
 
     // =========================================================================
-    // LAYER 6: 4 EDUCATIONAL FEATURE SATELLITES (NO FLOATING DOTS)
+    // LAYER 6: 4 EDUCATIONAL FEATURE SATELLITES (SMOOTH ROUNDED EDGES & 100% COMPLETE ICONS)
     // =========================================================================
     const tilesGroup = new THREE.Group();
     mascotRoot.add(tilesGroup);
+
+    const createSmoothRoundedTileGeometry = (size = 0.66, depth = 0.08, radius = 0.14) => {
+      const shape = new THREE.Shape();
+      const half = size / 2;
+      const r = radius;
+
+      shape.moveTo(-half + r, -half);
+      shape.lineTo(half - r, -half);
+      shape.quadraticCurveTo(half, -half, half, -half + r);
+      shape.lineTo(half, half - r);
+      shape.quadraticCurveTo(half, half, half - r, half);
+      shape.lineTo(-half + r, half);
+      shape.quadraticCurveTo(-half, half, -half, half - r);
+      shape.lineTo(-half, -half + r);
+      shape.quadraticCurveTo(-half, -half, -half + r, -half);
+
+      const geom = new THREE.ExtrudeGeometry(shape, {
+        depth: depth,
+        bevelEnabled: true,
+        bevelSegments: 5,
+        steps: 1,
+        bevelSize: 0.025,
+        bevelThickness: 0.025,
+      });
+      geom.center();
+
+      // STRICT REQUIREMENT: Normalize UV coordinates across [0, 1]
+      // Fixes the issue where tiles were incomplete with only a corner arc visible
+      geom.computeBoundingBox();
+      const bb = geom.boundingBox!;
+      const sizeX = bb.max.x - bb.min.x;
+      const sizeY = bb.max.y - bb.min.y;
+      const uvAttr = geom.getAttribute('uv');
+      const posAttr = geom.getAttribute('position');
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = posAttr.getX(i);
+        const y = posAttr.getY(i);
+        const u = (x - bb.min.x) / sizeX;
+        const v = (y - bb.min.y) / sizeY;
+        uvAttr.setXY(i, u, v);
+      }
+      uvAttr.needsUpdate = true;
+
+      return geom;
+    };
 
     const createFloatingTile = (
       type: 'book' | 'code' | 'flask' | 'globe',
@@ -1121,17 +1191,14 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
         emissiveIntensity: 0.2,
       });
 
+      // ExtrudeGeometry materials: [0] = front/back caps, [1] = smooth beveled rounded edges
       const materials = [
-        tileBezelMat, // +X
-        tileBezelMat, // -X
-        tileBezelMat, // +Y
-        tileBezelMat, // -Y
-        iconFrontMat, // +Z (FRONT FACE)
-        tileBezelMat, // -Z
+        iconFrontMat,
+        tileBezelMat,
       ];
 
-      const tileGeom = new THREE.BoxGeometry(0.66, 0.66, 0.10);
-      const tileMesh = new THREE.Mesh(tileGeom, materials);
+      const smoothTileGeom = createSmoothRoundedTileGeometry(0.66, 0.08, 0.14);
+      const tileMesh = new THREE.Mesh(smoothTileGeom, materials);
       tileMesh.castShadow = true;
       group.add(tileMesh);
 
@@ -1189,7 +1256,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     });
     const shadowPlane = new THREE.Mesh(shadowPlaneGeom, shadowPlaneMat);
     shadowPlane.rotation.x = -Math.PI / 2;
-    shadowPlane.position.y = -1.65;
+    shadowPlane.position.y = -1.58;
     shadowPlane.receiveShadow = true;
     scene.add(shadowPlane);
 
@@ -1238,7 +1305,10 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       if (!container) return;
       const w = container.clientWidth || 880;
       const h = container.clientHeight || 520;
+      const nowMobile = window.innerWidth < 768;
       camera.aspect = w / h;
+      camera.position.set(0, -0.28, nowMobile ? 9.2 : 8.15);
+      camera.lookAt(0, -0.28, 0);
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
@@ -1297,10 +1367,6 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       // Gyroscope Orbit Rings Rotation (smooth continuous without dots)
       gyroRing1.rotation.z = elapsedTime * 0.18;
       gyroRing2.rotation.z = -elapsedTime * 0.14;
-
-      // Mini 3D Holographic Atom above Tablet
-      miniAtomGroup.rotation.y += 0.035;
-      miniAtomGroup.rotation.x += 0.02;
 
       // Holographic Lesson Board hover & scanline sweep
       lessonBoardGroup.position.y = 0.62 + Math.sin(elapsedTime * 1.8 + 1) * 0.05;
@@ -1384,7 +1450,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       <div
         ref={mountRef}
         title="ClassroomLM AI Teacher · Click to interact"
-        className="w-[360px] sm:w-[560px] md:w-[740px] lg:w-[860px] xl:w-[940px] max-w-[min(98vw,960px)] h-[320px] sm:h-[420px] md:h-[480px] lg:h-[540px] cursor-default transition-transform duration-300"
+        className="w-[380px] sm:w-[620px] md:w-[820px] lg:w-[960px] xl:w-[1060px] max-w-[min(98vw,1060px)] h-[440px] sm:h-[500px] md:h-[560px] lg:h-[620px] cursor-default transition-transform duration-300"
         style={{
           background: 'transparent',
           border: 'none',

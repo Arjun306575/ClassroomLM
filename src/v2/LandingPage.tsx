@@ -20,6 +20,7 @@ import { useAuth, CREDIT_COSTS, DAILY_CREDITS_QUOTA } from '../firebase/authCont
 import { AuthModal } from '../components/AuthModal';
 import { executeRecaptcha, loadRecaptchaScript } from '../firebase/recaptcha';
 import { AdsterraAd } from '../components/AdsterraAd';
+import { photosynthesisLesson } from '../data/sampleLessons/photosynthesis';
 
 interface LandingPageProps {
   onGenerate: (config: any) => void;
@@ -27,6 +28,7 @@ interface LandingPageProps {
   onSaveSearch?: (query: string, result: string) => void;
   savedLessons?: any[];
   onLoadLesson?: (lesson: any) => void;
+  onLoadDemoLesson?: () => void;
   onDeleteLesson?: (id: string) => void;
   isDarkMode: boolean;
   toggleTheme: () => void;
@@ -38,6 +40,7 @@ export function LandingPage({
   onSaveSearch, 
   savedLessons = [], 
   onLoadLesson, 
+  onLoadDemoLesson,
   onDeleteLesson, 
   isDarkMode, 
   toggleTheme 
@@ -346,6 +349,14 @@ export function LandingPage({
     }
   };
 
+  const handleTriggerDemo = () => {
+    if (onLoadDemoLesson) {
+      onLoadDemoLesson();
+    } else if (onLoadLesson) {
+      onLoadLesson(photosynthesisLesson);
+    }
+  };
+
   return (
     <div className={`w-full min-h-[100dvh] flex flex-col relative overflow-x-hidden transition-colors duration-500 ${isDarkMode ? 'bg-[#050B14] text-white' : 'bg-blue-50 text-slate-900'}`}>
       {/* Dynamic Sky Background (z-0) */}
@@ -378,7 +389,7 @@ export function LandingPage({
           </h1>
         </div>
         
-        {/* Header Action Buttons - Short and Neat on Mobile */}
+        {/* Header Action Buttons - Short and Neat on Mobile (No Demo Button in Title Bar) */}
         <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2.5 shrink-0">
           {/* High-Cost Credit Counter UI: ⚡ 100 / 100 Credits */}
           <button 
@@ -489,7 +500,8 @@ export function LandingPage({
             Step into a live, interactive learning environment. A dedicated AI teacher awaits to explain complex topics visually.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 sm:mb-12">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 w-full max-w-2xl px-3">
+            {/* Primary Action: Big and Longer Custom Classroom Creation Button */}
             <button 
               onClick={() => {
                 if (!currentUser) {
@@ -498,10 +510,25 @@ export function LandingPage({
                 }
                 setIsModalOpen(true);
               }}
-              className="px-8 sm:px-10 py-3.5 sm:py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-full font-black text-base sm:text-lg shadow-[0_0_35px_rgba(37,99,235,0.45)] hover:shadow-[0_0_55px_rgba(37,99,235,0.65)] hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 sm:gap-3 border border-white/25 group"
+              className="w-full sm:w-auto px-10 sm:px-14 py-4 sm:py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-full font-black text-base sm:text-lg shadow-[0_0_40px_rgba(37,99,235,0.5)] hover:shadow-[0_0_60px_rgba(37,99,235,0.7)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/30 group sm:min-w-[340px]"
             >
-              <Presentation className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              Create Custom Classroom
+              <Presentation className="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform shrink-0" />
+              <span>Create Custom Classroom</span>
+            </button>
+
+            {/* Secondary Action: Shorter, Compact Sample Lesson Button */}
+            <button 
+              type="button"
+              onClick={handleTriggerDemo}
+              className={`w-full sm:w-auto px-5 sm:px-6 py-3 rounded-full font-bold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 border backdrop-blur-xl group ${
+                isDarkMode 
+                  ? 'bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.15)]' 
+                  : 'bg-white/95 hover:bg-white border-slate-200 text-slate-700 hover:text-blue-700 shadow-sm'
+              }`}
+              title="Experience an interactive lesson on Photosynthesis instantly with zero latency"
+            >
+              <Play className="w-3.5 h-3.5 fill-current text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
+              <span>Try Sample Lesson</span>
             </button>
           </div>
         </motion.div>
