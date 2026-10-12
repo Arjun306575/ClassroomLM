@@ -47,10 +47,13 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
 
   return (
     <div 
-      className={`w-full flex justify-center items-center select-none ${className}`}
-      style={{ margin: '20px auto', display: 'flex', justifyContent: 'center' }}
+      className={`w-full flex flex-col justify-center items-center select-none ${className}`}
+      style={{ margin: '20px auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
       data-testid="adsterra-ad-container"
     >
+      <div className="flex items-center gap-1 mb-1.5 text-[10px] sm:text-[11px] uppercase tracking-wider font-medium text-slate-400 dark:text-slate-500 select-none">
+        <span>Sponsored</span>
+      </div>
       <div 
         ref={adWrapperRef} 
         className="w-full max-w-[728px] min-h-[60px] flex justify-center items-center overflow-hidden transition-all" 
