@@ -1,9 +1,10 @@
 import { Lesson } from '../../types';
+import { PHOTOSYNTHESIS_TTS_AUDIO } from './photosynthesisAudio';
 
 /**
  * Permanent Sample Demo Lesson: Photosynthesis (Energy from Sunlight)
  * Loads with 0ms latency, zero external API calls, full blackboard content,
- * speech narration script, and an interactive quiz.
+ * speech narration script, interactive quiz, and pre-baked TTS audio.
  */
 export const photosynthesisLesson: Lesson & {
   id: string;
@@ -46,6 +47,7 @@ export const photosynthesisLesson: Lesson & {
       teacherGesture: "pointing_whiteboard",
       spokenDialogue: "Welcome students! Today we explore photosynthesis, nature's solar power plant! Green chloroplasts capture sunlight to transform carbon dioxide and water into oxygen and high-energy glucose sugar.",
       bubbleCaption: "Nature's solar power plant converts light into glucose & oxygen.",
+      ttsAudio: PHOTOSYNTHESIS_TTS_AUDIO[0],
       whiteboardContent: {
         heading: "Photosynthesis: Core Equation",
         bulletPoints: [
@@ -64,6 +66,7 @@ export const photosynthesisLesson: Lesson & {
       teacherGesture: "explaining",
       spokenDialogue: "Inside the thylakoid discs, photons strike Photosystem II. This splits water molecules into protons, electrons, and vital oxygen gas, charging up ATP and NADPH chemical energy!",
       bubbleCaption: "Photolysis splits water to liberate oxygen and charge ATP/NADPH.",
+      ttsAudio: PHOTOSYNTHESIS_TTS_AUDIO[1],
       whiteboardContent: {
         heading: "Light-Dependent Phase (Thylakoids)",
         bulletPoints: [
@@ -82,6 +85,7 @@ export const photosynthesisLesson: Lesson & {
       teacherGesture: "writing",
       spokenDialogue: "Next, inside the fluid stroma, the Calvin cycle takes over. RuBisCO fixes atmospheric carbon dioxide into 3-PGA, and consumes our ATP and NADPH to construct glucose!",
       bubbleCaption: "RuBisCO enzyme fixes atmospheric CO2 into food storage sugars.",
+      ttsAudio: PHOTOSYNTHESIS_TTS_AUDIO[2],
       whiteboardContent: {
         heading: "The Calvin Cycle (Stroma)",
         bulletPoints: [
@@ -100,6 +104,7 @@ export const photosynthesisLesson: Lesson & {
       teacherGesture: "celebrating",
       spokenDialogue: "Photosynthesis rate is governed by Blackman's Law of Limiting Factors: light intensity, temperature, and carbon dioxide levels. Together, Earth's forests and oceans absorb billions of tons of carbon annually!",
       bubbleCaption: "Blackman's Law: light, CO2, and temperature control photosynthetic rate.",
+      ttsAudio: PHOTOSYNTHESIS_TTS_AUDIO[3],
       whiteboardContent: {
         heading: "Limiting Factors & Global Significance",
         bulletPoints: [
@@ -117,6 +122,7 @@ export const photosynthesisLesson: Lesson & {
       teacherGesture: "celebrating",
       spokenDialogue: "To master photosynthesis: remember that the light reactions charge chemical batteries in the thylakoids, and the Calvin cycle spends those batteries in the stroma to produce sugar. Outstanding work today!",
       bubbleCaption: "Light phase charges ATP in thylakoids; Calvin cycle spends it in stroma.",
+      ttsAudio: PHOTOSYNTHESIS_TTS_AUDIO[4],
       whiteboardContent: {
         heading: "Photosynthesis Mastery Summary",
         bulletPoints: [

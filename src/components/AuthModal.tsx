@@ -9,17 +9,25 @@ interface AuthModalProps {
   onClose: () => void;
   reason?: string;
   isDarkMode: boolean;
+  initialMode?: 'signin' | 'signup';
 }
 
-export function AuthModal({ isOpen, onClose, reason, isDarkMode }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = 'signin' }: AuthModalProps) {
   const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode || 'signin');
+      setError(null);
+    }
+  }, [isOpen, initialMode]);
 
   useEffect(() => {
     console.log('reCAPTCHA initialized:', import.meta.env.VITE_RECAPTCHA_SITE_KEY);

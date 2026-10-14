@@ -885,17 +885,21 @@ Respond strictly with valid JSON matching the schema.`;
         });
       }
 
-      // Pre-generate Gemini TTS audio for the first slide so teacher voice starts immediately without delay
+      // Pre-generate Gemini TTS audio for all slides in the timeline so audio is baked into the lesson
       try {
-        const firstDialogue = parsedData.timeline[0]?.spokenDialogue || parsedData.timeline[0]?.bubbleCaption;
-        if (firstDialogue) {
-          const ttsWav = await generateTtsAudio(firstDialogue, voice);
-          if (ttsWav) {
-            parsedData.timeline[0].ttsAudio = ttsWav;
+        if (Array.isArray(parsedData.timeline)) {
+          for (let i = 0; i < parsedData.timeline.length; i++) {
+            const dialogue = parsedData.timeline[i]?.spokenDialogue || parsedData.timeline[i]?.bubbleCaption;
+            if (dialogue) {
+              const ttsWav = await generateTtsAudio(dialogue, voice);
+              if (ttsWav) {
+                parsedData.timeline[i].ttsAudio = ttsWav;
+              }
+            }
           }
         }
       } catch (e) {
-        console.warn("Could not pre-generate slide 1 TTS audio:", e);
+        console.warn("Could not pre-generate timeline TTS audio in server:", e);
       }
     }
 

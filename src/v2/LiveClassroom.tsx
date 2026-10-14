@@ -503,6 +503,12 @@ export function LiveClassroom({
       let base64Wav = preCachedBase64Wav;
 
       if (!base64Wav) {
+        // STRICT RULE: Never generate TTS again and again in demo or saved lessons!
+        const isSavedOrDemo = Boolean(lessonData?.isDemoLesson || lessonData?.isLoadedFromSaved || lessonData?.loadedFromSaved);
+        if (isSavedOrDemo) {
+          throw new Error("Demo and saved lessons use pre-saved TTS audio without generating TTS again.");
+        }
+
         const res = await fetch("/api/tts", {
           method: "POST",
           headers: { 

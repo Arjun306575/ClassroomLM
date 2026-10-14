@@ -18,6 +18,7 @@ export interface TimelineStep {
   whiteboardContent: WhiteboardContent;
   audioBase64?: string;
   audioTranslationBase64?: string;
+  ttsAudio?: string;
 }
 
 export interface QuizQuestion {

@@ -20,6 +20,7 @@ import { useAuth, CREDIT_COSTS, DAILY_CREDITS_QUOTA } from '../firebase/authCont
 import { AuthModal } from '../components/AuthModal';
 import { executeRecaptcha, loadRecaptchaScript } from '../firebase/recaptcha';
 import { AdsterraAd } from '../components/AdsterraAd';
+import { CreditModal } from '../components/CreditModal';
 import { photosynthesisLesson } from '../data/sampleLessons/photosynthesis';
 
 interface LandingPageProps {
@@ -60,6 +61,7 @@ export function LandingPage({
   const [creditAlert, setCreditAlert] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [isSavedDrawerOpen, setIsSavedDrawerOpen] = useState(false);
   const [savedFilter, setSavedFilter] = useState<'all' | 'lessons' | 'magic' | 'search'>('all');
 
@@ -91,6 +93,17 @@ export function LandingPage({
       window.speechSynthesis.cancel();
     }
   }, []);
+
+  useEffect(() => {
+    const handleHash = () => {
+      if (typeof window !== 'undefined' && window.location.hash === '#signin' && !currentUser) {
+        openAuthModal("Sign in to unlock interactive lessons and 100 free daily credits.");
+      }
+    };
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, [currentUser, openAuthModal]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -377,15 +390,15 @@ export function LandingPage({
       {/* Sticky Top Bar Header - Mobile Optimized, Short and Neat */}
       <header className={`fixed top-0 inset-x-0 z-[40] px-2.5 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 flex justify-between items-center transition-all duration-300 ${isScrolled ? (isDarkMode ? 'bg-slate-900/85 backdrop-blur-md border-b border-white/10 shadow-lg' : 'bg-white/85 backdrop-blur-md border-b border-slate-200 shadow-sm') : 'bg-transparent'}`}>
         {/* Brand Logo & Title */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
           <img 
             src="/logo512.svg" 
             alt="ClassroomLM Logo" 
-            className={`transition-all shrink-0 ${isScrolled ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11'}`} 
+            className={`transition-all shrink-0 ${isScrolled ? 'w-7 h-7 sm:w-8 sm:h-8' : 'w-8 h-8 sm:w-9 sm:h-9 md:w-11 md:h-11'}`} 
           />
-          <h1 className={`font-black tracking-tight flex items-center gap-1 shrink-0 ${isScrolled ? 'text-base sm:text-lg md:text-xl' : 'text-base sm:text-xl md:text-2xl'} ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} transition-all`}>
+          <h1 className={`font-black tracking-tight flex items-center gap-1.5 shrink-0 ${isScrolled ? 'text-lg sm:text-xl md:text-xl' : 'text-xl sm:text-2xl md:text-2xl'} ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} transition-all`}>
             <span>ClassroomLM</span>
-            <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-orange-400 fill-orange-400 animate-pulse shrink-0" />
+            <Star className="w-3 h-3 text-orange-400 fill-orange-400 animate-pulse shrink-0" />
           </h1>
         </div>
         
@@ -393,19 +406,20 @@ export function LandingPage({
         <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2.5 shrink-0">
           {/* High-Cost Credit Counter UI: ⚡ 100 / 100 Credits */}
           <button 
-            onClick={() => setIsProfileOpen(true)}
-            className={`py-1 px-2 sm:px-2.5 md:px-3 rounded-full border transition-all flex items-center gap-1 sm:gap-1.5 font-bold text-xs active:scale-95 shrink-0 ${
+            onClick={() => setIsCreditModalOpen(true)}
+            className={`py-1 px-2 sm:px-2.5 md:px-3 rounded-full border transition-all flex items-center gap-1 sm:gap-1.5 font-bold text-xs active:scale-95 shrink-0 cursor-pointer ${
               credits >= 50
                 ? (isDarkMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 shadow-[0_0_12px_rgba(16,185,129,0.2)]' : 'border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100')
                 : credits >= 25
                 ? (isDarkMode ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 shadow-[0_0_12px_rgba(245,158,11,0.2)]' : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100')
                 : (isDarkMode ? 'border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 shadow-[0_0_12px_rgba(239,68,68,0.2)]' : 'border-red-300 bg-red-50 text-red-900 hover:bg-red-100')
             }`}
-            title={`Remaining Daily Credits: ${credits}/100 (⚡ 50/Lesson, 25/Magic Lens, 10/Search)`}
+            title={`Generation Credits: ${credits}. Click to top up free credits!`}
           >
             <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
             <span className="font-mono font-black text-xs">{credits}</span>
-            <span className="hidden sm:inline text-[10px] font-semibold opacity-70">/ 100</span>
+            <span className="hidden sm:inline text-[10px] font-semibold opacity-70">Credits</span>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full font-black hidden md:inline">+Top Up</span>
           </button>
 
           {/* Saved Content Button (Magic Lens, AI Search, Lessons) */}
@@ -458,8 +472,11 @@ export function LandingPage({
             </button>
           ) : (
             <button 
-              onClick={() => openAuthModal("Sign in to unlock interactive lessons and 100 free daily credits.")}
-              className="py-1 px-2.5 sm:px-3.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-1 shrink-0"
+              onClick={() => {
+                if (typeof window !== 'undefined') window.location.hash = 'signin';
+                openAuthModal("Sign in to unlock interactive lessons and 100 free daily credits.");
+              }}
+              className="py-1 px-2.5 sm:px-3.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer"
               title="Sign In"
             >
               <LogIn className="w-3.5 h-3.5 shrink-0" />
@@ -470,7 +487,7 @@ export function LandingPage({
       </header>
 
       {/* Hero Section */}
-      <main className="relative z-[10] flex-1 flex flex-col items-center px-4 sm:px-6 md:px-8 pt-20 sm:pt-28 md:pt-32 pb-14 sm:pb-20 w-full max-w-7xl mx-auto">
+      <main className="relative z-[10] flex-1 flex flex-col items-center px-4 sm:px-6 md:px-8 pt-20 sm:pt-28 md:pt-32 pb-4 sm:pb-6 w-full max-w-7xl mx-auto">
         
         {/* Giant Glowing Logo Area with Fresh Modern Styling */}
         <motion.div 
@@ -485,7 +502,7 @@ export function LandingPage({
           {/* 3D AI Teacher Mascot - Primary Hero Visual */}
           <AIMascotHero isDarkMode={isDarkMode} className="mb-2 sm:mb-4" />
 
-          <h2 className={`text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b relative flex items-center justify-center gap-2 md:gap-4 drop-shadow-sm ${isDarkMode ? 'from-white via-blue-200 to-indigo-400' : 'from-blue-600 via-blue-800 to-indigo-950'}`}>
+          <h2 className={`text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b relative flex items-center justify-center gap-2 md:gap-4 drop-shadow-sm ${isDarkMode ? 'from-white via-blue-200 to-indigo-400' : 'from-blue-600 via-blue-800 to-indigo-950'}`}>
             ClassroomLM
           </h2>
         </motion.div>
@@ -534,7 +551,7 @@ export function LandingPage({
         </motion.div>
         
         {/* Animated Feature Cards - Fresh Look with Compact Responsive Styling */}
-        <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6 lg:gap-8 relative z-10 mt-6 sm:mt-10 mb-12 sm:mb-16">
+        <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6 lg:gap-8 relative z-10 mt-6 sm:mt-10 mb-6 sm:mb-8">
           {[
             {
               icon: "👨‍🏫",
@@ -599,7 +616,10 @@ export function LandingPage({
         </div>
 
         {/* Adsterra Native Placement directly below Feature Cards Grid */}
-        <div className="w-full flex justify-center items-center relative z-10 px-4">
+        <div 
+          className="w-full flex justify-center items-center relative z-10 px-4 mb-3 shrink-0"
+          style={{ touchAction: 'pan-y' }}
+        >
           <AdsterraAd />
         </div>
       </main>
@@ -1466,11 +1486,12 @@ export function LandingPage({
             setClassLevel={setClassLevel}
             language={language}
             setLanguage={setLanguage}
+            onOpenCreditModal={() => setIsCreditModalOpen(true)}
           />
         )}
       </AnimatePresence>
 
-      {/* Insufficient Credit Alert Modal */}
+      {/* Insufficient Credit Alert Modal with Direct Smartlink Top Up Option */}
       <AnimatePresence>
         {creditAlert && (
           <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
@@ -1496,16 +1517,38 @@ export function LandingPage({
               <p className={`text-sm leading-relaxed mb-6 font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                 {creditAlert}
               </p>
-              <button
-                onClick={() => setCreditAlert(null)}
-                className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl transition-all shadow-lg active:scale-95 text-sm"
-              >
-                Understood
-              </button>
+              
+              <div className="w-full flex flex-col gap-2.5">
+                <button
+                  onClick={() => {
+                    setCreditAlert(null);
+                    setIsCreditModalOpen(true);
+                  }}
+                  className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-amber-500/25 active:scale-95 text-sm flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 fill-slate-950" />
+                  <span>⚡ Get 50 Free Credits</span>
+                </button>
+                <button
+                  onClick={() => setCreditAlert(null)}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  Dismiss
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* Adsterra Smartlink Top Up Credit Modal */}
+      <CreditModal
+        isOpen={isCreditModalOpen}
+        onClose={() => setIsCreditModalOpen(false)}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Strict Authentication Gated Modal */}
       <AuthModal

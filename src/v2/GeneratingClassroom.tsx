@@ -49,7 +49,19 @@ export function GeneratingClassroom({
       const topic = lessonToSave?.config?.topic || lessonToSave?.title || "Educational Topic";
       const description = lessonToSave?.description || `Class: ${lessonToSave?.config?.classLevel || 'N/A'} | Lang: ${lessonToSave?.config?.language || 'N/A'} | Persona: ${lessonToSave?.config?.persona || 'Friendly Mentor'}`;
 
-      // Save all content (timeline, audio, captions, board content, quiz) to user's Saved Content
+      // Automatically save to local storage immediately so it is 100% guaranteed saved
+      try {
+        const stored = typeof window !== 'undefined' ? localStorage.getItem('classroomlm_saved_lessons') : null;
+        const prev = stored ? JSON.parse(stored) : [];
+        const filtered = prev.filter((l: any) => l.id !== lessonToSave.id && (l.title || '').trim().toLowerCase() !== topic.trim().toLowerCase());
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('classroomlm_saved_lessons', JSON.stringify([lessonToSave, ...filtered]));
+        }
+      } catch (localErr) {
+        console.warn("Could not save to localStorage:", localErr);
+      }
+
+      // Save all content (timeline, audio, captions, board content, quiz) to user's Saved Content in Firestore
       if (currentUser && saveItem) {
         try {
           await saveItem({
@@ -114,6 +126,28 @@ export function GeneratingClassroom({
         if (isCancelled) return;
 
         if (data.timeline && Array.isArray(data.timeline) && data.timeline.length > 0) {
+          // Guarantee all timeline slides have pre-cached TTS audio before saving
+          await Promise.all(data.timeline.map(async (slide: any) => {
+            if (!slide.ttsAudio) {
+              const text = slide.spokenDialogue || slide.bubbleCaption;
+              if (text) {
+                try {
+                  const ttsRes = await fetch("/api/tts", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text, voice })
+                  });
+                  if (ttsRes.ok) {
+                    const ttsJson = await ttsRes.json();
+                    slide.ttsAudio = ttsJson.audio || ttsJson.audioContent;
+                  }
+                } catch (e) {
+                  // Fallback safely handled in player
+                }
+              }
+            }
+          }));
+
           const updatedLesson = {
             ...lessonData,
             title: data.title || topic,
@@ -212,6 +246,24 @@ export function GeneratingClassroom({
             }
           }
         ];
+
+        await Promise.all(fallbackTimeline.map(async (slide: any) => {
+          const text = slide.spokenDialogue || slide.bubbleCaption;
+          if (text) {
+            try {
+              const ttsRes = await fetch("/api/tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text, voice: lessonData?.config?.voice || "Kore" })
+              });
+              if (ttsRes.ok) {
+                const ttsJson = await ttsRes.json();
+                slide.ttsAudio = ttsJson.audio || ttsJson.audioContent;
+              }
+            } catch (e) {}
+          }
+        }));
+
         const updatedLesson = {
           ...lessonData,
           title: topic,
@@ -240,21 +292,21 @@ export function GeneratingClassroom({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 1.02 }}
       transition={{ duration: 0.45, ease: "easeOut" }}
-      className={`min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-6 py-12 ${
+      className={`min-h-[100dvh] w-full flex flex-col items-center justify-start sm:justify-center relative overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-16 sm:pt-12 pb-12 sm:pb-16 ${
         isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'
       }`}
     >
-      {/* Home Button */}
-      <div className="absolute top-6 left-6 z-50">
+      {/* Home Button - Fixed top-left for stable mobile access */}
+      <div className="fixed top-4 left-4 sm:top-6 sm:left-6 z-50">
         <button 
           onClick={onGoHome}
-          className={`px-4 py-2.5 rounded-full flex items-center gap-2 font-bold text-sm transition-all border ${
+          className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full flex items-center gap-2 font-bold text-xs sm:text-sm transition-all border shadow-md active:scale-95 ${
             isDarkMode 
-              ? 'bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-white' 
+              ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-700 text-white' 
               : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-sm'
           }`}
         >
-          <Home className="w-4 h-4" />
+          <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span>Home</span>
         </button>
       </div>
@@ -348,7 +400,10 @@ export function GeneratingClassroom({
         </div>
 
         {/* Adsterra Native Placement directly below generation box */}
-        <div className="w-full flex justify-center items-center mt-6 pt-2">
+        <div 
+          className="w-full flex justify-center items-center mt-6 pt-2 pb-8 overflow-visible shrink-0"
+          style={{ touchAction: 'pan-y' }}
+        >
           <AdsterraAd className="max-w-xl" />
         </div>
 

@@ -33,55 +33,44 @@ export default function AppV2() {
 
   // Combine Firestore cloud items and local cache with strict deduplication
   const combinedSavedLessons = useMemo(() => {
-    if (currentUser) {
-      const firestoreMapped = firestoreSavedItems.map(item => {
-        let parsedData = item.data;
-        if (typeof parsedData === 'string') {
-          try { parsedData = JSON.parse(parsedData); } catch (e) {}
-        }
-        parsedData = parsedData || {};
+    const firestoreMapped = currentUser ? firestoreSavedItems.map(item => {
+      let parsedData = item.data;
+      if (typeof parsedData === 'string') {
+        try { parsedData = JSON.parse(parsedData); } catch (e) {}
+      }
+      parsedData = parsedData || {};
 
-        let timeline = (item as any).timeline || parsedData.timeline || (parsedData.data && parsedData.data.timeline);
-        if (typeof timeline === 'string') {
-          try { timeline = JSON.parse(timeline); } catch (e) {}
-        }
+      let timeline = (item as any).timeline || parsedData.timeline || (parsedData.data && parsedData.data.timeline);
+      if (typeof timeline === 'string') {
+        try { timeline = JSON.parse(timeline); } catch (e) {}
+      }
 
-        return {
-          id: item.id,
-          title: item.title || "Untitled",
-          description: item.description || "",
-          isMagicLens: item.type === 'magic_lens',
-          isAISearch: item.type === 'ai_search',
-          timeline: Array.isArray(timeline) ? timeline : undefined,
-          quiz: parsedData.quiz || [],
-          data: parsedData,
-          config: item.config || parsedData.config || {},
-          messages: []
-        };
-      });
+      return {
+        id: item.id,
+        title: item.title || "Untitled",
+        description: item.description || "",
+        isMagicLens: item.type === 'magic_lens',
+        isAISearch: item.type === 'ai_search',
+        timeline: Array.isArray(timeline) ? timeline : undefined,
+        quiz: parsedData.quiz || [],
+        data: parsedData,
+        config: item.config || parsedData.config || {},
+        messages: []
+      };
+    }) : [];
 
-      // Deduplicate items so nothing ever shows twice
-      const seen = new Set<string>();
-      return firestoreMapped.filter(item => {
-        const itemType = item.isMagicLens ? 'magic' : item.isAISearch ? 'search' : 'lesson';
-        const key = `${itemType}:::${item.title.trim().toLowerCase()}`;
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
-    }
+    // Combine both Firestore items and local items to guarantee all saved content is immediately accessible
+    const merged = [...firestoreMapped, ...(savedLessons || [])];
 
-    // Guest fallback (deduplicated local storage)
-    const seenLocal = new Set<string>();
-    return savedLessons.filter(item => {
+    // Deduplicate items so nothing ever shows twice
+    const seen = new Set<string>();
+    return merged.filter(item => {
       const itemType = item.isMagicLens ? 'magic' : item.isAISearch ? 'search' : 'lesson';
-      const key = `${itemType}:::${(item.title || '').trim().toLowerCase()}`;
-      if (seenLocal.has(key)) {
+      const key = `${itemType}:::${(item.title || item.id || '').trim().toLowerCase()}`;
+      if (seen.has(key)) {
         return false;
       }
-      seenLocal.add(key);
+      seen.add(key);
       return true;
     });
   }, [currentUser, firestoreSavedItems, savedLessons]);
@@ -131,8 +120,13 @@ export default function AppV2() {
   };
 
   const handleLessonReady = (updatedLesson: any) => {
+    const topic = updatedLesson.config?.topic || updatedLesson.title || "Interactive Lesson";
+    const description = updatedLesson.description || `Class: ${updatedLesson.config?.classLevel || 'N/A'} | Lang: ${updatedLesson.config?.language || 'N/A'} | Persona: ${updatedLesson.config?.persona || 'Friendly Mentor'}`;
+
     const fullLesson = {
       ...updatedLesson,
+      title: topic,
+      description,
       data: {
         ...(updatedLesson.data || {}),
         timeline: updatedLesson.timeline,
@@ -141,15 +135,52 @@ export default function AppV2() {
       }
     };
     setActiveLesson(fullLesson);
+
+    // Automatically save lesson to local cache
     setSavedLessons(prev => {
-      const filtered = prev.filter(l => l.id !== fullLesson.id && (l.title || '').trim().toLowerCase() !== (fullLesson.title || '').trim().toLowerCase());
-      return [fullLesson, ...filtered];
+      const filtered = prev.filter(l => l.id !== fullLesson.id && (l.title || '').trim().toLowerCase() !== topic.trim().toLowerCase());
+      const updated = [fullLesson, ...filtered];
+      try {
+        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
     });
+
+    // Automatically save lesson to cloud user account if logged in
+    if (currentUser && saveItem) {
+      saveItem({
+        title: topic,
+        description,
+        type: 'lesson',
+        data: {
+          timeline: fullLesson.timeline,
+          quiz: fullLesson.quiz || [],
+          config: fullLesson.config || {}
+        },
+        config: fullLesson.config || {}
+      }).catch(err => console.warn("Firestore auto-save lesson failed", err));
+    }
   };
 
   const handleSaveMagicLens = (result: string, promptText?: string) => {
     const title = promptText && promptText.trim() ? promptText.trim() : "Magic Lens Capture";
-    // Single source of truth: save to Firestore if logged in, else local
+    const newLensItem = {
+      id: Date.now().toString(),
+      title,
+      description: "Visual Problem Solution",
+      isMagicLens: true,
+      data: { result },
+      config: {
+        topic: title,
+        persona: "AI Assistant"
+      },
+      messages: []
+    };
+
+    // Save to local cache
+    setSavedLessons(prev => [newLensItem, ...prev]);
+
+    // Save to Firestore if user logged in
     if (currentUser && saveItem) {
       saveItem({
         title,
@@ -161,25 +192,27 @@ export default function AppV2() {
           persona: "AI Assistant"
         }
       }).catch(err => console.warn("Firestore save failed", err));
-    } else {
-      const newLesson = {
-        id: Date.now().toString(),
-        title,
-        description: "Visual Problem Solution",
-        isMagicLens: true,
-        data: { result },
-        config: {
-          topic: title,
-          persona: "AI Assistant"
-        },
-        messages: []
-      };
-      setSavedLessons(prev => [newLesson, ...prev]);
     }
   };
 
   const handleSaveSearch = (query: string, result: string) => {
-    // Single source of truth: save to Firestore if logged in, else local
+    const newSearchItem = {
+      id: Date.now().toString(),
+      title: query,
+      description: "AI Generated Solution",
+      isAISearch: true,
+      data: { result },
+      config: {
+        topic: query,
+        persona: "AI Search"
+      },
+      messages: []
+    };
+
+    // Save to local cache
+    setSavedLessons(prev => [newSearchItem, ...prev]);
+
+    // Save to Firestore if user logged in
     if (currentUser && saveItem) {
       saveItem({
         title: query,
@@ -191,20 +224,6 @@ export default function AppV2() {
           persona: "AI Search"
         }
       }).catch(err => console.warn("Firestore save failed", err));
-    } else {
-      const newLesson = {
-        id: Date.now().toString(),
-        title: query,
-        description: "AI Generated Solution",
-        isAISearch: true,
-        data: { result },
-        config: {
-          topic: query,
-          persona: "AI Search"
-        },
-        messages: []
-      };
-      setSavedLessons(prev => [newLesson, ...prev]);
     }
   };
 
@@ -355,7 +374,7 @@ export default function AppV2() {
   };
 
   return (
-    <div className="w-full min-h-screen overflow-hidden relative">
+    <div className="w-full min-h-screen overflow-x-hidden relative">
       <AnimatePresence mode="wait">
         {viewState === 'landing' && (
           <motion.div

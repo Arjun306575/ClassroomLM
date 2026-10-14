@@ -69,6 +69,7 @@ interface AuthContextType {
   signOutUser: () => Promise<void>;
   updateSettings: (classLevel: string, language: string) => Promise<void>;
   deductCredits: (cost: number, featureName: 'Lessons' | 'Magic Lens' | 'AI Search') => Promise<{ success: boolean; error?: string; remainingCredits?: number }>;
+  addCredits: (amount: number) => Promise<number>;
   savedItems: SavedEducationalItem[];
   saveItem: (item: Omit<SavedEducationalItem, 'id' | 'userId' | 'createdAt'>) => Promise<string>;
   deleteItem: (id: string) => Promise<void>;
@@ -409,6 +410,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser, openAuthModal]);
 
+  // Atomic Credit Increment for Top-ups & Rewards (Adsterra Smartlink: 1 Click = +50 Credits)
+  const addCredits = useCallback(async (amount: number): Promise<number> => {
+    const incrementAmount = Math.max(0, amount);
+    
+    // Instantly update local React state for instantaneous UI feedback
+    setCredits(prev => {
+      const next = prev + incrementAmount;
+      try {
+        localStorage.setItem('classroomlm_user_credits', next.toString());
+      } catch (e) {}
+      return next;
+    });
+
+    if (!currentUser) {
+      return (Number(localStorage.getItem('classroomlm_user_credits')) || DAILY_CREDITS_QUOTA);
+    }
+
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    try {
+      let finalBalance = 0;
+      await runTransaction(db, async (transaction) => {
+        const userDoc = await transaction.get(userDocRef);
+        if (!userDoc.exists()) return;
+        const data = userDoc.data() as UserProfile;
+        const current = data.credits ?? DAILY_CREDITS_QUOTA;
+        finalBalance = current + incrementAmount;
+        transaction.update(userDocRef, {
+          credits: finalBalance,
+          updatedAt: new Date().toISOString()
+        });
+      });
+      if (finalBalance > 0) {
+        setCredits(finalBalance);
+      }
+      return finalBalance;
+    } catch (err: any) {
+      console.warn("Could not sync credit top-up to Firestore:", err);
+      return 0;
+    }
+  }, [currentUser]);
+
   // Save Item to Firestore subcollection
   const saveItem = useCallback(async (
     itemData: Omit<SavedEducationalItem, 'id' | 'userId' | 'createdAt'>
@@ -458,6 +500,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOutUser,
     updateSettings,
     deductCredits,
+    addCredits,
     savedItems,
     saveItem,
     deleteItem,
@@ -477,6 +520,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOutUser,
     updateSettings,
     deductCredits,
+    addCredits,
     savedItems,
     saveItem,
     deleteItem,

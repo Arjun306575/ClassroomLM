@@ -901,7 +901,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     bodyGroup.add(thrusterInnerMesh);
 
     // =========================================================================
-    // LAYER 3: CONTINUOUS ARMS & SMART BOOK/TAB (SMOOTH & FULLY VISIBLE)
+    // LAYER 3: CONTINUOUS ARMS & SMART BOOK/TAB (SNUGLY TUCKED AT FLANK, NO PENETRATION)
     // =========================================================================
     // LEFT ARM (Smooth continuous robotic arm holding the smart book/tablet)
     const leftArmGroup = new THREE.Group();
@@ -916,47 +916,49 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
     // Bicep (upper arm): continuous, extends down-outward-forward to the elbow
     const bicepLGeom = new THREE.CapsuleGeometry(0.085, 0.26, 14, 14);
     const bicepLMesh = new THREE.Mesh(bicepLGeom, glossyWhiteMat);
-    bicepLMesh.position.set(-0.09, -0.13, 0.06);
-    bicepLMesh.rotation.set(0.38, 0.12, 0.44);
+    bicepLMesh.position.set(-0.08, -0.14, 0.06);
+    bicepLMesh.rotation.set(0.35, 0.10, 0.38);
     leftArmGroup.add(bicepLMesh);
 
     // Elbow ball joint
     const elbowLGeom = new THREE.SphereGeometry(0.09, 14, 14);
     const elbowLMesh = new THREE.Mesh(elbowLGeom, silverMetalMat);
-    elbowLMesh.position.set(-0.16, -0.24, 0.12);
+    elbowLMesh.position.set(-0.16, -0.26, 0.10);
     leftArmGroup.add(elbowLMesh);
 
-    // Forearm (lower arm): extends smoothly from elbow to hand
-    const forearmLGeom = new THREE.CapsuleGeometry(0.08, 0.28, 14, 14);
+    // Forearm (lower arm): extends smoothly from elbow to hand alongside book
+    const forearmLGeom = new THREE.CapsuleGeometry(0.075, 0.28, 14, 14);
     const forearmLMesh = new THREE.Mesh(forearmLGeom, glossyWhiteMat);
-    forearmLMesh.position.set(-0.17, -0.26, 0.22);
-    forearmLMesh.rotation.set(0.85, 0.08, 0.0);
+    forearmLMesh.position.set(-0.24, -0.26, 0.16);
+    forearmLMesh.rotation.set(0.82, 0.08, -0.12);
     leftArmGroup.add(forearmLMesh);
 
-    // Hand wrist and palm: holds the tablet firmly at the side
+    // Hand wrist and palm: holds the tablet firmly at the outer rim without penetrating
     const handLGroup = new THREE.Group();
-    handLGroup.position.set(-0.18, -0.25, 0.32);
+    handLGroup.position.set(-0.31, -0.22, 0.23);
     leftArmGroup.add(handLGroup);
 
-    const handLGeom = new THREE.SphereGeometry(0.085, 14, 14);
+    // Compact robot palm positioned just outside the book border
+    const handLGeom = new THREE.SphereGeometry(0.065, 16, 16);
     const handLMesh = new THREE.Mesh(handLGeom, glossyWhiteMat);
+    handLMesh.position.set(-0.02, 0, 0);
     handLGroup.add(handLMesh);
 
-    // Cute robotic fingers gently clasping the edge of the book cover
-    [-0.035, 0, 0.035].forEach((offsetY) => {
-      const fingerGeom = new THREE.CapsuleGeometry(0.022, 0.07, 10, 10);
+    // Robotic fingers gently clasping the outer margin of the book cover
+    [-0.03, 0, 0.03].forEach((offsetY) => {
+      const fingerGeom = new THREE.CapsuleGeometry(0.018, 0.06, 10, 10);
       const fingerMesh = new THREE.Mesh(fingerGeom, glossyWhiteMat);
-      fingerMesh.position.set(0.02, offsetY, 0.04);
-      fingerMesh.rotation.set(0.2, 0.3, 0.15);
+      fingerMesh.position.set(0.025, offsetY, 0.022);
+      fingerMesh.rotation.set(0.1, 0.35, 0.1);
       handLGroup.add(fingerMesh);
     });
 
-    // SMART TAB / BOOK (Positioned clearly outside body at the mascot's flank, graduation cap 100% visible facing camera)
+    // SMART TAB / BOOK (Tucked firmly between hand and body in bodyGroup, graduation cap 100% visible)
     const tabletGroup = new THREE.Group();
-    tabletGroup.position.set(-0.74, -0.20, 0.28);
-    tabletGroup.rotation.set(0.10, 0.32, -0.10);
-    tabletGroup.scale.set(0.88, 0.88, 0.88);
-    mascotRoot.add(tabletGroup);
+    tabletGroup.position.set(-0.62, -0.22, 0.22);
+    tabletGroup.rotation.set(0.08, 0.26, -0.06);
+    tabletGroup.scale.set(0.85, 0.85, 0.85);
+    bodyGroup.add(tabletGroup); // Attached to bodyGroup to guarantee zero relative movement/penetration!
 
     const tabletTexture = createTabletTexture();
     const tabletScreenMat = new THREE.MeshStandardMaterial({
@@ -976,7 +978,7 @@ export function AIMascotThreeCanvas({ className = '', isDarkMode = false }: AIMa
       silverMetalMat,  // -Z
     ];
 
-    const tabletGeom = new THREE.BoxGeometry(0.68, 0.94, 0.06);
+    const tabletGeom = new THREE.BoxGeometry(0.64, 0.90, 0.05);
     const tabletMesh = new THREE.Mesh(tabletGeom, tabletMaterials);
     tabletMesh.castShadow = true;
     tabletGroup.add(tabletMesh);
