@@ -617,7 +617,7 @@ export function LandingPage({
 
         {/* Adsterra Native Placement directly below Feature Cards Grid */}
         <div 
-          className="w-full flex justify-center items-center relative z-10 px-4 mb-3 shrink-0"
+          className="w-full flex justify-center items-center relative z-10 px-4 mb-2 shrink-0 overflow-visible"
           style={{ touchAction: 'pan-y' }}
         >
           <AdsterraAd />

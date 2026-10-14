@@ -8,24 +8,24 @@ interface AdsterraAdProps {
  * Adsterra native banner placement component
  * Safely loads external script in an isolated iframe sandbox to ensure
  * reliable execution on all views (including Homepage and Generating Lesson page).
- * Automatically calculates dynamic content height to ensure no images, cards, or copy
- * (including all 4 ads in mobile and desktop layouts) are partially cut or obscured.
+ * Automatically calculates dynamic content height from deepest rendered ad elements
+ * to ensure all 4 ads are fully visible with no excessive empty space and no scroll lag.
  */
 export function AdsterraAd({ className = '' }: AdsterraAdProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  // Default height initialized cleanly; dynamically expands to fit all 4 native ads
-  const [iframeHeight, setIframeHeight] = useState<number>(320);
-  const currentHeightRef = useRef<number>(320);
+  // Default height initialized cleanly; dynamically adjusts to the exact height of all ads
+  const [iframeHeight, setIframeHeight] = useState<number>(240);
+  const currentHeightRef = useRef<number>(240);
 
-  // Update height to fit all 4 native ads across both mobile and desktop (up to 2600px)
+  // Update height to fit all 4 native ads without compounding whitespace
   const updateHeight = (reported: number) => {
     if (typeof reported !== 'number' || isNaN(reported) || reported <= 30) return;
-    // Buffer of +35px ensures the 4th ad card, its action button, brand label, and shadows are fully visible
-    const clamped = Math.max(120, Math.min(2600, Math.round(reported + 35)));
+    // Tight 8px buffer ensures shadows and borders are visible without leaving empty gaps
+    const clamped = Math.max(80, Math.min(2600, Math.round(reported + 8)));
     const prev = currentHeightRef.current;
     
-    // Always expand to accommodate full content; only reduce if significant (>= 35px) to prevent scroll jitter
-    if (clamped > prev || Math.abs(clamped - prev) >= 35) {
+    // Only adjust if difference is meaningful (>= 15px) to prevent scroll jitter/lag
+    if (Math.abs(clamped - prev) >= 15) {
       currentHeightRef.current = clamped;
       setIframeHeight(clamped);
     }
@@ -63,7 +63,6 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
               html, body {
                 width: 100%;
                 height: auto;
-                min-height: 100%;
                 background: transparent;
                 display: flex;
                 flex-direction: column;
@@ -72,7 +71,7 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
                 overflow: visible;
                 font-family: system-ui, -apple-system, sans-serif;
                 touch-action: pan-y;
-                padding-bottom: 20px;
+                padding-bottom: 4px;
               }
               #container-f93109a9ce4a4227b16a6d92e94a8b1f {
                 width: 100%;
@@ -83,7 +82,7 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
                 justify-content: flex-start;
                 overflow: visible;
                 touch-action: pan-y;
-                padding-bottom: 12px;
+                padding-bottom: 2px;
               }
               #container-f93109a9ce4a4227b16a6d92e94a8b1f img {
                 max-width: 100%;
@@ -96,9 +95,9 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
             <div id="container-f93109a9ce4a4227b16a6d92e94a8b1f"></div>
             <script type="text/javascript">
               function getDeepestBottom() {
-                var b = document.body;
-                if (!b) return 0;
-                var all = b.querySelectorAll('*');
+                var c = document.getElementById('container-f93109a9ce4a4227b16a6d92e94a8b1f');
+                if (!c) return 0;
+                var all = c.querySelectorAll('*');
                 var maxBottom = 0;
                 for (var i = 0; i < all.length; i++) {
                   var el = all[i];
@@ -114,19 +113,12 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
 
               function measureAndReport() {
                 var c = document.getElementById('container-f93109a9ce4a4227b16a6d92e94a8b1f');
-                var b = document.body;
-                var docElem = document.documentElement;
+                if (!c) return;
 
+                // Measure strictly by deepest rendered content element inside container
+                // to avoid compounding scrollHeight inflation and empty bottom space
                 var deepest = getDeepestBottom();
-                var h = Math.max(
-                  deepest,
-                  c ? (c.scrollHeight || 0) : 0,
-                  c ? (c.offsetHeight || 0) : 0,
-                  b ? (b.scrollHeight || 0) : 0,
-                  b ? (b.offsetHeight || 0) : 0,
-                  docElem ? (docElem.scrollHeight || 0) : 0,
-                  docElem ? (docElem.offsetHeight || 0) : 0
-                );
+                var h = deepest > 40 ? deepest : (c.offsetHeight || 0);
 
                 if (h > 40) {
                   try {
@@ -192,8 +184,9 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (doc && doc.body) {
           const container = doc.getElementById('container-f93109a9ce4a4227b16a6d92e94a8b1f');
+          if (!container) return;
           let maxBottom = 0;
-          const all = doc.body.querySelectorAll('*');
+          const all = container.querySelectorAll('*');
           for (let i = 0; i < all.length; i++) {
             const el = all[i] as HTMLElement;
             if (el.offsetHeight > 0 || el.offsetWidth > 0) {
@@ -201,13 +194,7 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
               if (rect.bottom > maxBottom) maxBottom = rect.bottom;
             }
           }
-          const h = Math.max(
-            maxBottom,
-            container?.scrollHeight || 0,
-            container?.offsetHeight || 0,
-            doc.body.scrollHeight || 0,
-            doc.documentElement?.scrollHeight || 0
-          );
+          const h = maxBottom > 40 ? maxBottom : (container.offsetHeight || 0);
           if (h > 40) {
             updateHeight(h);
           }
@@ -215,17 +202,15 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
       } catch (e) {}
     };
 
-    const t1 = setTimeout(checkDomHeight, 500);
-    const t2 = setTimeout(checkDomHeight, 1400);
-    const t3 = setTimeout(checkDomHeight, 2800);
-    const t4 = setTimeout(checkDomHeight, 5000);
-    const t5 = setTimeout(checkDomHeight, 8000);
+    const t1 = setTimeout(checkDomHeight, 600);
+    const t2 = setTimeout(checkDomHeight, 1500);
+    const t3 = setTimeout(checkDomHeight, 3000);
+    const t4 = setTimeout(checkDomHeight, 5500);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
       clearTimeout(t4);
-      clearTimeout(t5);
     };
   }, []);
 
@@ -233,7 +218,7 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
     <div 
       className={`w-full flex flex-col justify-center items-center select-none ${className}`}
       style={{ 
-        margin: '4px auto 0 auto', 
+        margin: '0 auto', 
         display: 'flex', 
         flexDirection: 'column', 
         alignItems: 'center',
@@ -253,7 +238,7 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
           title="Sponsored Educational Partner"
           style={{ 
             height: `${iframeHeight}px`, 
-            minHeight: '120px',
+            minHeight: '80px',
             touchAction: 'pan-y'
           }}
           className="w-full border-0 bg-transparent overflow-visible"

@@ -1,116 +1,121 @@
-# Adsterra Smartlink Monetization & Homepage Ad Layout Polish
+# ClassroomLM: Credit Quota Hardening, Username-Based Auth & Sustainable Ad Layout
 
-Integrate the Adsterra Smartlink monetization model through a sleek, user-friendly Credit Modal (+50 credits per sponsor visit with 30s anti-fraud cooldown) and eliminate excessive empty space beneath ads on the homepage.
+Implement quota safeguards to prevent daily generation credits from exceeding 100 (+50 top up restricted when balance > 50 and gated for authenticated users), streamline account creation with clean username input without '@' and duplicate username alerts, and eliminate excess whitespace below homepage ads sustainably without `overflow: hidden`.
 
-### User Review & Critical Decisions
+## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The implementation strictly adheres to the requested Adsterra Smartlink URL, single-click +50 credit reward model, 30-second cooldown timer, exact UI copywriting, and responsive dark modal styling.
-
-- **Confirmed Decision 1 (Smartlink URL & Reward Trigger)**: Centralized configuration constant `ADSTERRA_SMARTLINK_URL = "https://asiafilm.org/4/2fa49655ff370a4066b732ffd0860242"` in `src/config/adsterra.ts`. Clicking the CTA awards +50 credits immediately to local storage and user state, opening the sponsor link safely with `window.open(..., '_blank', 'noopener,noreferrer')`.
-- **Confirmed Decision 2 (Anti-Fraud Cooldown)**: 30-second cooldown timer persisted in `localStorage` (`classroomlm_smartlink_cooldown_until`) preventing ad network policy violations and spam clicking across modal toggles and page reloads.
-- **Confirmed Decision 3 (Homepage Ad Spacing Fix)**: Remove artificial minimum height ceilings (`Math.max(280, ...)` and `minHeight: 220px`) inside `AdsterraAd.tsx` so the iframe tightly bounds the native banner height, and tighten `<main>` bottom padding (`pb-14 sm:pb-20` down to `pb-4 sm:pb-6`) in `LandingPage.tsx` to eliminate the dead space before the footer.
-
----
-
-### 1. Overview & Core Concept
-
-- **What It Does**: ClassroomLM provides free AI lessons, Magic Lens problem breakdowns, and AI chalkboard searches funded through non-intrusive sponsor support. When users need more credits (or run low on daily credits), they can click "⚡ Get 50 Free Credits" to visit an educational sponsor via Adsterra Smartlink, instantaneously receiving +50 generation credits.
-- **Target Audience**: Students and self-learners looking to generate unlimited custom lessons without paying subscription fees.
-- **Key Value**: Frictionless, single-click top-up experience that rewards students with 50 credits per visit while adhering to ad network anti-fraud standards with a 30-second cooldown guard.
+> The following architectural decisions were confirmed based on user feedback:
+> - **Top Up Credit Hard Cap (Max 100)**: Users with more than 50 credits cannot top up (+50 would exceed 100 quota). The CTA button is disabled and clearly labeled `Max 100 Credits Reached` with a helper badge explaining that credits must be spent before topping up.
+> - **Guest User Gating**: Guests cannot top up generation credits. The modal displays a dedicated `Sign In to Claim +50 Credits` action button that smoothly opens the authentication flow.
+> - **Username Without '@' for Signup & Signin**: The auth form accepts a clean student username without requiring '@' or triggering HTML5 email validation tooltips. Internally, accounts map to sanitized student credentials, and duplicate registrations display a clear warning: `This name already exists. Please choose a different username or sign in.`
+> - **Sustainable Ad Height Measurement**: Excess whitespace below the homepage ads is eliminated by measuring the true bounding rect of the rendered ad cards (`getDeepestBottom`), removing reliance on `document.documentElement.scrollHeight` which causes compounding height inflation, without using `overflow: hidden`.
 
 ---
 
-### 2. User Experience & Visual Design
+## 1. Overview & Core Concept
 
-#### Key User Flows
-1. **Direct Top-Up from Header**:
-   - The user taps the header credit counter badge (`⚡ [credits] / 100`).
-   - The "Top Up Generation Credits" modal appears with smooth spring entrance animation and backdrop blur.
-   - User sees their current balance, feature credit costs, and the primary action button: `"⚡ Get 50 Free Credits"`.
-2. **Reward Claim & Cooldown**:
-   - User clicks `"⚡ Get 50 Free Credits"`.
-   - The Adsterra Smartlink opens in a new background tab safely via `noopener,noreferrer`.
-   - Balance immediately increments by +50 credits, accompanied by an instant success notification toast.
-   - The CTA button switches to a countdown state (`"Please wait 30s..."`) with animated clock indicator and disabled interaction.
-3. **Low / Insufficient Credit Flow**:
-   - When a user attempts to generate a lesson or use Magic Lens without sufficient credits, the prompt modal directly offers a `"⚡ Get 50 Free Credits"` button that opens the Credit Modal.
-4. **Clean Homepage Flow**:
-   - When scrolling to the bottom of the homepage, the native sponsor banner sits comfortably below the feature cards with proportional margins, seamlessly transitioning into the footer with no awkward vertical void.
-
-#### Visual Identity & Theme
-- **Color Palette & Glassmorphism**:
-  - Deep canvas: `bg-slate-900/95` border with `border-slate-700/80`.
-  - Ambient energy: Subtle amber (`rgba(245,158,11,0.18)`) and cyan (`rgba(6,182,212,0.12)`) radial gradients.
-  - Accent: High-contrast amber-to-orange gradient (`from-amber-500 via-orange-500 to-amber-600`) for the primary action button.
-- **Typography & Copy**:
-  - Title: `"Top Up Generation Credits"` (20px–24px bold).
-  - Subtitle: `"Support ClassroomLM by visiting our sponsor to instantly get 50 credits!"`
-  - Primary CTA: `"⚡ Get 50 Free Credits"`
-  - Cooldown Indicator: `"Please wait [seconds]s..."` with subtle helper caption `"Anti-spam cooldown active · Button ready in [seconds]s"`.
-- **Accessibility & Spacing**:
-  - Touch target height: $\ge 48\text{px}$ on all buttons.
-  - Tabular figures (`tabular-nums font-mono`) for credit counts and cooldown timers.
+- **What It Does**: 
+  1. Enforces strict quota protection on the Adsterra Smartlink credit engine: only authenticated users with $\le 50$ credits can trigger the reward, preventing balance overflow past 100.
+  2. Simplifies student onboarding by replacing standard email inputs with intuitive username-based authentication that never asks for "@".
+  3. Ensures immediate feedback if a chosen student username is already registered (`This name already exists`).
+  4. Optimizes the homepage native ad container so the space below ads fits snugly without compounding gaps or mobile scroll lag.
+- **Target Audience**: K-12 and university students accessing AI lessons, visual scan problem-solving, and chalkboard search.
+- **Key Value**: Fair-use monetization protection, friction-free student signups, and a polished, tight homepage layout.
 
 ---
 
-### 3. Key Product Decisions & Trade-Offs
+## 2. User Experience & Visual Design
 
-- **Decision 1: Persistent Cooldown in LocalStorage vs. Memory-Only**:
-  - *Chosen Approach*: Persist timestamp `classroomlm_smartlink_cooldown_until` in `localStorage`.
-  - *Why*: Prevents circumventing the 30-second cooldown by closing and reopening the modal or reloading the page, guaranteeing compliance with Adsterra anti-fraud terms.
-- **Decision 2: Optimistic Instant Credit Allocation**:
-  - *Chosen Approach*: Apply `addCredits(50)` synchronously on click rather than waiting for window return events.
-  - *Why*: Browser security limits cross-origin communication from popup tabs. Rewarding immediately upon outbound click gives instant positive reinforcement to the user.
-- **Decision 3: Dynamic Adaptive Height for Adsterra Native Placement**:
-  - *Chosen Approach*: Replace hardcoded `Math.max(280, ...)` with true content height detection + ResizeObserver inside the sandbox iframe, and compress homepage main container bottom padding.
-  - *Why*: Eliminates the large empty void below homepage ads while ensuring banners never get clipped or truncated.
-
----
-
-### 4. Technical Architecture & Data Strategy
-
-#### Architecture & Component Diagram
+### Key User Flows
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                       ClassroomLM App                         │
-├───────────────────────────────┬───────────────────────────────┤
-│         LandingPage           │          LiveClassroom        │
-│  ┌─────────────────────────┐  │                               │
-│  │ Credit Badge / Header   │  │                               │
-│  └────────────┬────────────┘  │                               │
-│               │ opens         │                               │
-│               ▼               │                               │
-│  ┌─────────────────────────┐  │                               │
-│  │       CreditModal       │  │                               │
-│  │ ⚡ Get 50 Free Credits  │  │                               │
-│  └────────────┬────────────┘  │                               │
-└───────────────┼───────────────┴───────────────────────────────┘
-                │
-                ├──────────────────────────────────────┐
-                ▼                                      ▼
-    ┌──────────────────────┐               ┌──────────────────────┐
-    │  Adsterra Smartlink  │               │   AuthContext State  │
-    │  window.open(...)    │               │  credits += 50       │
-    │  (External Sponsor)  │               │  localStorage Sync   │
-    └──────────────────────┘               └──────────────────────┘
+[Student Visits Top Up Modal]
+       │
+       ├── Is Guest? ────────────────────────► Shows "Sign In to Claim +50 Credits" CTA
+       │                                        └── Click opens AuthModal in signin/signup mode
+       │
+       ├── Has > 50 Credits (e.g. 75)? ───────► Button Disabled: "⚡ Max 100 Credits Reached"
+       │                                        └── Badge: "Spend credits before topping up"
+       │
+       └── Has <= 50 Credits & Signed In? ───► Button Active: "⚡ Get 50 Free Credits"
+                                                └── Click grants +50, triggers 30s anti-spam timer
+
+[Student Creates Account (Sign Up)]
+       │
+       ├── Input field labeled "Username" (type="text", placeholder="e.g. alex2026")
+       ├── No "@" required, no browser tooltips demanding "@"
+       └── If username already taken:
+             └── Instant Alert: "This name already exists. Please choose a different username."
 ```
 
-#### State & Storage Contracts
+### Visual Identity & Theme
+- **Theme Consistency**: High-contrast dark theme matching ClassroomLM (`bg-slate-900`, `border-slate-700/80`, `text-white`).
+- **Quota Cap Indicators**: Amber/slate muted disabled state for the top-up CTA with lock/clock iconography when balance > 50.
+- **Input Styling**: Neutral background (`bg-slate-800 border-slate-700`), blue focus ring, leading icon (`User`), no HTML5 browser email tooltip popups.
+- **Adsterra Container**: Tightly bounded container with zero excessive bottom margin (`mb-2` instead of inflating padding), maintaining `touch-action: pan-y` for mobile fluidity.
 
-- `src/config/adsterra.ts`:
-  - `ADSTERRA_SMARTLINK_URL`: `"https://asiafilm.org/4/2fa49655ff370a4066b732ffd0860242"`
-  - `SMARTLINK_CREDIT_REWARD`: `50`
-  - `SMARTLINK_COOLDOWN_SECONDS`: `30`
-  - `SMARTLINK_COOLDOWN_STORAGE_KEY`: `"classroomlm_smartlink_cooldown_until"`
-- `CreditModal.tsx`:
-  - Manages `cooldownSeconds` state decremented via `setInterval`.
-  - Triggers `addCredits(50)` and opens Smartlink in new tab with `noopener,noreferrer`.
-- `AdsterraAd.tsx`:
-  - Dynamically calculates iframe height from actual container scroll/offset height without enforcing excessive 280px/220px minimums.
-- `LandingPage.tsx`:
-  - Wires `isCreditModalOpen` state.
-  - Credit badge in header opens `CreditModal`.
-  - Insufficient credit dialog triggers `CreditModal`.
-  - Adjusts spacing beneath feature cards and main container (`pb-4 sm:pb-6`).
+---
+
+## 3. Key Product Decisions & Trade-Offs
+
+- **Decision 1: Quota Ceiling Enforcement (>50 Credits)**
+  - *Chosen Approach*: Button disabled when `credits > 50`, accompanied by status indicator `Max 100 Credits Reached`. Backend/context credit addition checks `Math.min(DAILY_CREDITS_QUOTA, current + 50)`.
+  - *Why*: Eliminates credit hoarding and guarantees compliance with the 100 daily quota rule.
+- **Decision 2: Username Mapping Strategy**
+  - *Chosen Approach*: Accept student username input and map internally to `${sanitizedUsername}@classroomlm.app` when communicating with Firebase Auth, while displaying the pure student username in all UI components and Firestore user profile documents.
+  - *Why*: Firebase Auth requires an email format under the hood, but students should never be forced to type "@" or have an actual email address.
+- **Decision 3: Eliminating Ad Space Without `overflow: hidden`**
+  - *Chosen Approach*: Inside the isolated iframe, replace `Math.max(b.scrollHeight, docElem.scrollHeight)` with the exact deepest coordinate of rendered ad elements (`getDeepestBottom`). Prevent compounding height inflation where the iframe height expanded its own document's scroll height.
+  - *Why*: `overflow: hidden` would clip drop-shadows or 4th ad content on varying viewports. Exact coordinate tracking fits the ad perfectly with zero lag.
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+### Component & System Diagram
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                               ClassroomLM                              │
+├───────────────────────────────────┬────────────────────────────────────┤
+│           Credit Modal            │             Auth Modal             │
+│   (src/components/CreditModal)    │     (src/components/AuthModal)     │
+├───────────────────────────────────┼────────────────────────────────────┤
+│ • Guest check: !currentUser       │ • Input type="text" (Username)     │
+│   -> "Sign In to Claim" CTA       │ • Strips '@' requirement           │
+│ • Quota check: credits > 50       │ • Maps to @classroomlm.app internally│
+│   -> Disabled "Max 100 Reached"   │ • Catches auth/email-already-in-use │
+│ • Valid click: +50 credits (<=100)│   -> "This name already exists"    │
+└─────────────────┬─────────────────┴──────────────────┬─────────────────┘
+                  │                                    │
+                  ▼                                    ▼
+       ┌─────────────────────┐              ┌────────────────────┐
+       │   Adsterra Banner   │              │ Firebase Auth/Store│
+       │ (src/components/    │              │ (src/firebase/     │
+       │    AdsterraAd.tsx)  │              │    authContext)    │
+       ├─────────────────────┤              ├────────────────────┤
+       │ • getDeepestBottom()│              │ • sanitizeUsername │
+       │ • No compounding gap│              │ • credit limits    │
+       │ • No overflow:hidden│              │ • duplicate alerts │
+       └─────────────────────┘              └────────────────────┘
+```
+
+### Key Implementation Steps
+
+1. **Credit Modal & Quota Gating (`CreditModal.tsx`)**:
+   - Check `currentUser`: If guest, render a primary button: `🔐 Sign In to Top Up Credits`, which calls `onClose()` and `openAuthModal()`.
+   - Check `credits > 50`: If credits > 50, render disabled button: `⚡ Max 100 Credits Reached` with explanation badge: `Your balance is {credits}/100. Spend credits before topping up.`
+   - In `handleClaimCredits`: Enforce `if (!currentUser || credits > 50) return;`.
+
+2. **Username Authentication & Error Handling (`AuthModal.tsx` & `authContext.tsx`)**:
+   - Change input `type="email"` to `type="text"`, label to `"Username"`, placeholder to `"e.g. satyam or alex2026"`.
+   - In `signInWithEmail` and `signUpWithEmail`, if the value does not include `@`, append `@classroomlm.app` automatically.
+   - When Firebase throws `auth/email-already-in-use`, display exact user warning: `"This name already exists. Please choose a different username or sign in."`
+   - Ensure the student's display name and profile reflect their clean username without `@classroomlm.app`.
+
+3. **Homepage Adsterra Height Optimization (`AdsterraAd.tsx` & `LandingPage.tsx`)**:
+   - In `AdsterraAd.tsx` iframe script, compute height strictly from `getDeepestBottom()` of rendered elements inside `#container-f93109a9ce4a4227b16a6d92e94a8b1f`.
+   - Remove `b.scrollHeight` and `docElem.scrollHeight` fallback from the calculation, as these reflect the current iframe height and cause compounding growth.
+   - Set a clean +12px bottom spacing rather than +35px to prevent excess empty space below the ads.
+   - Verify layout stability on both mobile and desktop screens without `overflow: hidden`.

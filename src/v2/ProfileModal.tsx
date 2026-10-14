@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { X, Check, Zap, Shield, User, LogOut, LogIn, Sparkles, BookOpen, Camera, Search, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { X, Check, Zap, Shield, User, LogOut, LogIn, Sparkles, BookOpen, Camera, Search, RefreshCw, Lock, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { useAuth, DAILY_CREDITS_QUOTA, CREDIT_COSTS } from '../firebase/authContext';
 
 interface ProfileModalProps {
@@ -14,8 +14,11 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ isDarkMode, onClose, classLevel, setClassLevel, language, setLanguage, onOpenCreditModal }: ProfileModalProps) {
-  const { currentUser, userProfile, credits, signOutUser, updateSettings, openAuthModal } = useAuth();
+  const { currentUser, userProfile, credits, signOutUser, deleteAccount, updateSettings, openAuthModal } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const classes = [...Array(12)].map((_, i) => `Class ${i + 1}`);
   const languages = [
@@ -40,6 +43,21 @@ export function ProfileModal({ isDarkMode, onClose, classLevel, setClassLevel, l
     setLanguage(val);
     if (currentUser) {
       await updateSettings(classLevel, val);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (err: any) {
+      console.error("Account deletion failed:", err);
+      setDeleteError(err?.message || "Failed to delete account. Please try again.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -110,18 +128,32 @@ export function ProfileModal({ isDarkMode, onClose, classLevel, setClassLevel, l
             </div>
 
             {currentUser ? (
-              <button
-                onClick={signOutUser}
-                className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors ${
-                  isDarkMode 
-                    ? 'border-red-500/30 text-red-400 hover:bg-red-500/20' 
-                    : 'border-red-200 text-red-600 hover:bg-red-50'
-                }`}
-                title="Sign Out"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Exit</span>
-              </button>
+              <div className="flex flex-col gap-1.5 shrink-0 items-end">
+                <button
+                  onClick={signOutUser}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                    isDarkMode 
+                      ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white' 
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                  title="Log Out"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Log Out</span>
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                    isDarkMode 
+                      ? 'border-red-500/30 bg-red-950/20 text-red-400 hover:bg-red-500/20' 
+                      : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+                  }`}
+                  title="Delete Account"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                  <span>Delete Account</span>
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => {
@@ -193,10 +225,30 @@ export function ProfileModal({ isDarkMode, onClose, classLevel, setClassLevel, l
                   onClose();
                   onOpenCreditModal();
                 }}
-                className="w-full py-2.5 px-4 mb-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer shrink-0"
+                className={`w-full py-2.5 px-4 mb-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer shrink-0 ${
+                  !currentUser
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20 active:scale-[0.98]'
+                    : credits > 50
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700/80 hover:bg-slate-750'
+                    : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-amber-500/20 active:scale-[0.98]'
+                }`}
               >
-                <Zap className="w-4 h-4 fill-slate-950 shrink-0" />
-                <span>⚡ Top Up +50 Free Credits</span>
+                {!currentUser ? (
+                  <>
+                    <LogIn className="w-4 h-4 shrink-0" />
+                    <span>Sign In to Top Up Credits</span>
+                  </>
+                ) : credits > 50 ? (
+                  <>
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Max 100 Credits Reached</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 fill-slate-950 shrink-0" />
+                    <span>⚡ Top Up +50 Free Credits</span>
+                  </>
+                )}
               </button>
             )}
 
@@ -278,6 +330,84 @@ export function ProfileModal({ isDarkMode, onClose, classLevel, setClassLevel, l
           </button>
         </div>
       </motion.div>
+
+      {/* Delete Account Confirmation Modal / Alert */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isDeleting && setShowDeleteConfirm(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className={`relative w-full max-w-sm rounded-3xl p-6 shadow-2xl border flex flex-col z-10 ${
+                isDarkMode 
+                  ? 'bg-slate-900 border-red-500/30 text-white shadow-[0_0_50px_rgba(239,68,68,0.2)]' 
+                  : 'bg-white border-red-200 text-slate-900 shadow-2xl'
+              }`}
+            >
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mb-3.5 mx-auto border border-red-500/20">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-black text-center mb-2">Delete Account?</h3>
+              
+              <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-bold text-center leading-relaxed mb-3">
+                Deleting account deletes all your saved content permanently.
+              </div>
+
+              <p className={`text-xs text-center leading-relaxed mb-5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                All your saved interactive lessons, Magic Lens problem scans, chalkboard notes, and credit quota will be erased immediately. This action cannot be reversed.
+              </p>
+
+              {deleteError && (
+                <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-500 text-xs font-medium mb-4">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs border transition-all ${
+                    isDarkMode 
+                      ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white' 
+                      : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleDeleteAccount}
+                  className="flex-1 py-2.5 px-4 rounded-xl font-black text-xs bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/25 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Account</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

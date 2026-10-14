@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Zap, ExternalLink, Sparkles, Clock, CheckCircle2, ShieldCheck, BookOpen, Camera, Search } from 'lucide-react';
+import { X, Zap, ExternalLink, Sparkles, Clock, CheckCircle2, ShieldCheck, BookOpen, Camera, Search, LogIn, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../firebase/authContext';
 import { 
   ADSTERRA_SMARTLINK_URL, 
@@ -16,9 +16,12 @@ interface CreditModalProps {
 }
 
 export function CreditModal({ isOpen, onClose, isDarkMode }: CreditModalProps) {
-  const { credits, addCredits } = useAuth();
+  const { currentUser, credits, addCredits, openAuthModal } = useAuth();
   const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
   const [justRewarded, setJustRewarded] = useState(false);
+
+  const isGuest = !currentUser;
+  const isQuotaExceeded = credits > 50;
 
   // Check cooldown status on mount and when modal opens
   useEffect(() => {
@@ -57,22 +60,34 @@ export function CreditModal({ isOpen, onClose, isDarkMode }: CreditModalProps) {
   }, [isOpen]);
 
   const handleClaimCredits = async () => {
+    // 1. Guard against guest users
+    if (isGuest) {
+      onClose();
+      openAuthModal("Sign in to earn and save free generation credits.");
+      return;
+    }
+
+    // 2. Guard against credit quota overflow (cannot cross 100)
+    if (credits > 50) {
+      return;
+    }
+
     if (cooldownSeconds > 0) return;
 
-    // 1. Set 30s anti-spam cooldown in localStorage to comply with ad network anti-fraud policies
+    // 3. Set 30s anti-spam cooldown in localStorage to comply with ad network anti-fraud policies
     const cooldownExpiry = Date.now() + SMARTLINK_COOLDOWN_SECONDS * 1000;
     try {
       localStorage.setItem(SMARTLINK_COOLDOWN_STORAGE_KEY, cooldownExpiry.toString());
     } catch (e) {}
     setCooldownSeconds(SMARTLINK_COOLDOWN_SECONDS);
 
-    // 2. Open Adsterra Smartlink in a new tab safely
+    // 4. Open Adsterra Smartlink in a new tab safely
     window.open(ADSTERRA_SMARTLINK_URL, '_blank', 'noopener,noreferrer');
 
-    // 3. Instantly credit +50 credits to the user's balance
+    // 5. Instantly credit +50 credits to the user's balance
     await addCredits(SMARTLINK_CREDIT_REWARD);
 
-    // 4. Show success banner
+    // 6. Show success banner
     setJustRewarded(true);
     setTimeout(() => {
       setJustRewarded(false);
@@ -167,42 +182,93 @@ export function CreditModal({ isOpen, onClose, isDarkMode }: CreditModalProps) {
                 </div>
 
                 <div className="text-right">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    +50 Per Click
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    isGuest
+                      ? 'bg-blue-500/15 border border-blue-500/30 text-blue-300'
+                      : isQuotaExceeded 
+                      ? 'bg-slate-700/50 border border-slate-600 text-slate-300' 
+                      : 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                  }`}>
+                    {isGuest ? (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Guest Mode
+                      </>
+                    ) : isQuotaExceeded ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        Quota Cap
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        +50 Per Click
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
 
-              {/* Primary Action Button: 1 Click = 50 Credits with 30s Cooldown Indicator */}
+              {/* Action Button: State-Aware (Guest vs Quota Maxed vs Cooldown vs Ready) */}
               <div className="mb-3.5 sm:mb-5 shrink-0">
-                <button
-                  onClick={handleClaimCredits}
-                  disabled={cooldownSeconds > 0}
-                  className={`w-full py-3.5 sm:py-4 px-5 sm:px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-xl active:scale-[0.98] cursor-pointer ${
-                    cooldownSeconds > 0
-                      ? 'bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed opacity-80'
-                      : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:via-orange-400 hover:to-amber-500 text-slate-950 shadow-amber-500/30 hover:shadow-amber-500/50 hover:scale-[1.01]'
-                  }`}
-                >
-                  {cooldownSeconds > 0 ? (
-                    <>
-                      <Clock className="w-5 h-5 animate-spin text-amber-400" />
-                      <span>Please wait {cooldownSeconds}s...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-5 h-5 fill-slate-950" />
-                      <span>⚡ Get 50 Free Credits</span>
-                      <ExternalLink className="w-4 h-4 opacity-75" />
-                    </>
-                  )}
-                </button>
+                {isGuest ? (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      openAuthModal("Sign in to top up free generation credits.");
+                    }}
+                    className="w-full py-3.5 sm:py-4 px-5 sm:px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-xl active:scale-[0.98] cursor-pointer bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.01]"
+                  >
+                    <LogIn className="w-5 h-5 shrink-0" />
+                    <span>Sign In to Claim +50 Credits</span>
+                  </button>
+                ) : isQuotaExceeded ? (
+                  <button
+                    disabled
+                    className="w-full py-3.5 sm:py-4 px-5 sm:px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-2.5 bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed opacity-85 select-none"
+                  >
+                    <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span>⚡ Max 100 Credits Reached</span>
+                  </button>
+                ) : cooldownSeconds > 0 ? (
+                  <button
+                    disabled
+                    className="w-full py-3.5 sm:py-4 px-5 sm:px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-2.5 bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed opacity-80"
+                  >
+                    <Clock className="w-5 h-5 animate-spin text-amber-400 shrink-0" />
+                    <span>Please wait {cooldownSeconds}s...</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleClaimCredits}
+                    className="w-full py-3.5 sm:py-4 px-5 sm:px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-xl active:scale-[0.98] cursor-pointer bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:via-orange-400 hover:to-amber-500 text-slate-950 shadow-amber-500/30 hover:shadow-amber-500/50 hover:scale-[1.01]"
+                  >
+                    <Zap className="w-5 h-5 fill-slate-950 shrink-0" />
+                    <span>⚡ Get 50 Free Credits</span>
+                    <ExternalLink className="w-4 h-4 opacity-75 shrink-0" />
+                  </button>
+                )}
 
-                {cooldownSeconds > 0 && (
+                {/* Contextual Subtext Below Button */}
+                {isGuest ? (
                   <p className="text-[11px] text-center mt-2 text-slate-400 flex items-center justify-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-400" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span>Guest mode · Sign in or create an account to earn and save credits</span>
+                  </p>
+                ) : isQuotaExceeded ? (
+                  <p className="text-[11px] text-center mt-2 text-amber-400/90 flex items-center justify-center gap-1 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Balance is {credits}/100. Spend credits before topping up again.</span>
+                  </p>
+                ) : cooldownSeconds > 0 ? (
+                  <p className="text-[11px] text-center mt-2 text-slate-400 flex items-center justify-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-400 shrink-0" />
                     <span>Anti-spam cooldown active · Button ready in {cooldownSeconds}s</span>
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-center mt-2 text-slate-400 flex items-center justify-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>1 Click = +50 Free Credits · Instant balance update</span>
                   </p>
                 )}
               </div>
@@ -242,7 +308,7 @@ export function CreditModal({ isOpen, onClose, isDarkMode }: CreditModalProps) {
               {/* Footer note */}
               <div className="mt-2 sm:mt-3 pb-1 flex items-center justify-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 text-center shrink-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Fair usage policy · Instant credit allocation</span>
+                <span>Fair usage policy · Maximum daily balance 100 credits</span>
               </div>
             </div>
           </motion.div>

@@ -6,7 +6,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  updateProfile
+  updateProfile,
+  deleteUser
 } from 'firebase/auth';
 import { 
   doc, 
@@ -20,7 +21,9 @@ import {
   deleteDoc, 
   increment, 
   serverTimestamp,
-  runTransaction
+  runTransaction,
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 import { auth, db, googleAuthProvider, handleFirestoreError, OperationType } from './config';
 
@@ -73,6 +76,7 @@ interface AuthContextType {
   savedItems: SavedEducationalItem[];
   saveItem: (item: Omit<SavedEducationalItem, 'id' | 'userId' | 'createdAt'>) => Promise<string>;
   deleteItem: (id: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   isAuthModalOpen: boolean;
   authModalReason: string;
   openAuthModal: (reason?: string) => void;
@@ -105,6 +109,16 @@ export function validatePasswordStrength(password: string): { isValid: boolean; 
     isValid: errors.length === 0,
     errors
   };
+}
+
+export function normalizeAccountIdentifier(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.includes('@')) {
+    return trimmed.toLowerCase();
+  }
+  // Sanitize username for internal Firebase auth email representation
+  const sanitized = trimmed.toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+  return `${sanitized}@classroomlm.app`;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -290,32 +304,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Email & Password Sign-In
-  const signInWithEmail = useCallback(async (email: string, pass: string) => {
+  // Username / Email & Password Sign-In
+  const signInWithEmail = useCallback(async (identifier: string, pass: string) => {
+    const email = normalizeAccountIdentifier(identifier);
     try {
       await signInWithEmailAndPassword(auth, email, pass);
       setIsAuthModalOpen(false);
     } catch (error: any) {
-      console.error("Email sign-in error", error);
+      console.error("Account sign-in error", error);
       throw error;
     }
   }, []);
 
-  // Email & Password Sign-Up with strict password strength check
-  const signUpWithEmail = useCallback(async (email: string, pass: string, name?: string) => {
+  // Username / Email & Password Sign-Up with strict password strength check
+  const signUpWithEmail = useCallback(async (identifier: string, pass: string, name?: string) => {
     const strength = validatePasswordStrength(pass);
     if (!strength.isValid) {
       throw new Error(strength.errors[0]);
     }
 
+    const email = normalizeAccountIdentifier(identifier);
+    const chosenName = name?.trim() || identifier.trim().replace(/@.*/, '');
+
     try {
       const userCred = await createUserWithEmailAndPassword(auth, email, pass);
-      if (name && userCred.user) {
-        await updateProfile(userCred.user, { displayName: name });
+      if (userCred.user) {
+        await updateProfile(userCred.user, { displayName: chosenName });
       }
       setIsAuthModalOpen(false);
     } catch (error: any) {
-      console.error("Email registration error", error);
+      console.error("Account registration error", error);
       throw error;
     }
   }, []);
@@ -412,20 +430,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Atomic Credit Increment for Top-ups & Rewards (Adsterra Smartlink: 1 Click = +50 Credits)
   const addCredits = useCallback(async (amount: number): Promise<number> => {
+    // Guest users are strictly not allowed to top up credits
+    if (!currentUser) {
+      console.warn("[Credits Engine] Guest users cannot top up credits. Sign in required.");
+      return 0;
+    }
+
     const incrementAmount = Math.max(0, amount);
     
-    // Instantly update local React state for instantaneous UI feedback
+    // Instantly update local React state if balance <= 50, capping strictly at DAILY_CREDITS_QUOTA (100)
     setCredits(prev => {
-      const next = prev + incrementAmount;
+      if (prev > 50) return prev; // Do not allow if user has more than 50 credits
+      const next = Math.min(DAILY_CREDITS_QUOTA, prev + incrementAmount);
       try {
         localStorage.setItem('classroomlm_user_credits', next.toString());
       } catch (e) {}
       return next;
     });
-
-    if (!currentUser) {
-      return (Number(localStorage.getItem('classroomlm_user_credits')) || DAILY_CREDITS_QUOTA);
-    }
 
     const userDocRef = doc(db, 'users', currentUser.uid);
     try {
@@ -435,7 +456,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!userDoc.exists()) return;
         const data = userDoc.data() as UserProfile;
         const current = data.credits ?? DAILY_CREDITS_QUOTA;
-        finalBalance = current + incrementAmount;
+        
+        // Strict guard: if current balance > 50, do not increment
+        if (current > 50) {
+          finalBalance = current;
+          return;
+        }
+
+        finalBalance = Math.min(DAILY_CREDITS_QUOTA, current + incrementAmount);
         transaction.update(userDocRef, {
           credits: finalBalance,
           updatedAt: new Date().toISOString()
@@ -488,6 +516,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser]);
 
+  // Permanently Delete Account, all saved content, and user credentials
+  const deleteAccount = useCallback(async () => {
+    if (!currentUser) return;
+    const uid = currentUser.uid;
+
+    try {
+      // 1. Delete all saved items in the user's subcollection
+      try {
+        const savedItemsRef = collection(db, 'users', uid, 'savedItems');
+        const snapshot = await getDocs(savedItemsRef);
+        if (!snapshot.empty) {
+          const batch = writeBatch(db);
+          snapshot.forEach((itemDoc) => {
+            batch.delete(itemDoc.ref);
+          });
+          await batch.commit();
+        }
+      } catch (err) {
+        console.warn("[Auth Engine] Error deleting saved items during account deletion:", err);
+      }
+
+      // 2. Delete user profile document from Firestore
+      try {
+        const userDocRef = doc(db, 'users', uid);
+        await deleteDoc(userDocRef);
+      } catch (err) {
+        console.warn("[Auth Engine] Error deleting user profile doc during account deletion:", err);
+      }
+
+      // 3. Clean up local storage caches
+      try {
+        localStorage.removeItem('profileClass');
+        localStorage.removeItem('profileLang');
+      } catch (e) {
+        // ignore
+      }
+
+      // 4. Delete the Firebase Auth User
+      await deleteUser(currentUser);
+
+      // 5. Clean up local state
+      setCurrentUser(null);
+      setUserProfile(null);
+      setCredits(DAILY_CREDITS_QUOTA);
+      setSavedItems([]);
+    } catch (error: any) {
+      console.error("[Auth Engine] Delete account error:", error);
+      if (error?.code === 'auth/requires-recent-login') {
+        throw new Error("For security, deleting your account requires a recent sign in. Please log out, sign in again, and retry.");
+      }
+      throw error;
+    }
+  }, [currentUser]);
+
   const value = useMemo(() => ({
     currentUser,
     userProfile,
@@ -504,6 +586,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     savedItems,
     saveItem,
     deleteItem,
+    deleteAccount,
     isAuthModalOpen,
     authModalReason,
     openAuthModal,
@@ -524,6 +607,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     savedItems,
     saveItem,
     deleteItem,
+    deleteAccount,
     isAuthModalOpen,
     authModalReason,
     openAuthModal,
