@@ -4,7 +4,10 @@
  */
 
 // Official Adsterra Smartlink Monetization URL
-export const ADSTERRA_SMARTLINK_URL = "https://asiafilm.org/4/2fa49655ff370a4066b732ffd0860242";
+export const ADSTERRA_SMARTLINK_URL = "https://araplhn.org/4/1318a0beea33cd491f0b903cf1be47fd";
+
+// Official Adsterra Social Bar Script URL for Generating Lessons view
+export const ADSTERRA_SOCIAL_BAR_URL = "https://bauval.org/14/4c54359ed7ca9dd720c3c72e2c90b90a";
 
 // Reward trigger: 1 Click = 50 Credits
 export const SMARTLINK_CREDIT_REWARD = 50;

@@ -405,6 +405,8 @@ export function LiveClassroom({
   const currentGainNodeRef = useRef<GainNode | null>(null);
   const lineTimersRef = useRef<NodeJS.Timeout[]>([]);
   const isMountedRef = useRef(true);
+  const playbackSessionIdRef = useRef<number>(0);
+  const initializedLessonIdRef = useRef<string | null>(null);
 
   const currentLanguage = lessonData?.config?.language || 'English';
   const currentVoiceConfig = languageMap[currentLanguage] || { lang: 'en-US', voice: 'Kore' };
@@ -437,11 +439,32 @@ export function LiveClassroom({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // Global mount/unmount audio killer to prevent any lingering noise
+  // Global mount/unmount audio killer & 100% Ad-Free Classroom guarantee
   useEffect(() => {
     isMountedRef.current = true;
+
+    // Ad-Free Guarantee: completely remove any residual Adsterra floating overlays or scripts
+    const adsterraSelectors = [
+      '[id*="adsterra"]',
+      '[class*="adsterra"]',
+      '[id*="at-cv-lightbox"]',
+      '.at-cv-overlay',
+      '[class*="at-cv"]',
+      'div[style*="z-index: 2147483647"]',
+      'div[style*="z-index: 9999999"]',
+      'iframe[src*="bauval.org"]'
+    ];
+    document.querySelectorAll(adsterraSelectors.join(', ')).forEach(el => {
+      try {
+        if (el.id !== 'root' && !el.closest('#root')) {
+          el.remove();
+        }
+      } catch (e) {}
+    });
+
     return () => {
       isMountedRef.current = false;
+      playbackSessionIdRef.current++;
       clearCaptionTimers();
       if (currentAudioSourceRef.current) {
         try { 
@@ -476,6 +499,7 @@ export function LiveClassroom({
     bulletPointsToSync?: string[],
     preCachedBase64Wav?: string
   ) => {
+    const sessionId = playbackSessionIdRef.current;
     if (!isMountedRef.current) return;
     clearCaptionTimers();
     setIsSlideNarrationComplete(false);
@@ -495,7 +519,7 @@ export function LiveClassroom({
     }
 
     const sentences = splitIntoSentences(textWithEmotions);
-    if (sentences.length > 0) {
+    if (sentences.length > 0 && playbackSessionIdRef.current === sessionId) {
       setCaptionLine(sentences[0]);
     }
 
@@ -521,14 +545,14 @@ export function LiveClassroom({
           })
         });
 
-        if (!isMountedRef.current) return;
+        if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
         if (!res.ok) throw new Error("TTS fetch returned non-200");
 
         const json = await res.json();
         base64Wav = json.audio || json.audioContent;
       }
 
-      if (!base64Wav || !isMountedRef.current) return;
+      if (!base64Wav || !isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
 
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -550,7 +574,7 @@ export function LiveClassroom({
       }
 
       const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
 
       // Clean Audio PCM Smoothing: eliminate clicks, pops, and end-of-speech noise
       for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
@@ -625,9 +649,10 @@ export function LiveClassroom({
           source.disconnect();
           gainNode.disconnect();
         } catch (e) {}
-        if (isMountedRef.current) {
+        if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
           setMascotPose('neutral');
           setIsSpeaking(false);
+          setIsSlideNarrationComplete(true);
         }
       };
 
@@ -641,7 +666,7 @@ export function LiveClassroom({
       sentences.forEach((s, idx) => {
         if (idx === 0) return;
         const timer = setTimeout(() => {
-          if (!isMountedRef.current) return;
+          if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
           setCaptionLine(s);
 
           // If bullet points exist, advance active line highlight line-by-line
@@ -656,7 +681,7 @@ export function LiveClassroom({
 
       // Wait for audio playback to finish completely
       await new Promise(r => setTimeout(r, durationMs));
-      if (isMountedRef.current) {
+      if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
         setIsSpeaking(false);
         setIsSlideNarrationComplete(true);
         setActiveBulletIndex(-1);
@@ -664,7 +689,7 @@ export function LiveClassroom({
       }
 
     } catch (err) {
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
       console.warn("Gemini TTS fallback to browser SpeechSynthesis:", err);
 
       // Clean browser voice speech fallback in user's language
@@ -676,14 +701,14 @@ export function LiveClassroom({
           utterance.lang = currentVoiceConfig.lang || 'en-US';
           utterance.rate = 1.0;
           utterance.onstart = () => {
-            if (isMountedRef.current) {
+            if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
               setMascotPose('explaining');
               setIsSpeaking(true);
               setIsSlideNarrationComplete(false);
             }
           };
           utterance.onend = () => {
-            if (isMountedRef.current) {
+            if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
               setMascotPose('happy');
               setIsSpeaking(false);
               setIsSlideNarrationComplete(true);
@@ -700,7 +725,7 @@ export function LiveClassroom({
       // Progress line-by-line synced with captions and blackboard bullets
       setIsSpeaking(true);
       for (let i = 0; i < sentences.length; i++) {
-        if (!isMountedRef.current) return;
+        if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
         setCaptionLine(sentences[i]);
         if (bulletPointsToSync && bulletPointsToSync.length > 0) {
           const bIdx = Math.min(i, bulletPointsToSync.length - 1);
@@ -708,8 +733,9 @@ export function LiveClassroom({
           setRevealedBulletCount(prev => Math.max(prev, bIdx + 1));
         }
         await new Promise(r => setTimeout(r, 2600));
+        if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
       }
-      if (isMountedRef.current) {
+      if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
         setMascotPose('happy');
         setIsSpeaking(false);
         setIsSlideNarrationComplete(true);
@@ -717,12 +743,18 @@ export function LiveClassroom({
         setRevealedBulletCount(bulletPointsToSync ? bulletPointsToSync.length : 10);
       }
     }
-  }, [currentVoiceConfig]);
+  }, [currentVoiceConfig, lessonData]);
 
   // Load and apply a specific step from the lesson timeline
   const applyTimelineStep = useCallback(async (step: any, stepIdx: number, total: number) => {
+    const sessionId = ++playbackSessionIdRef.current;
     setIsSlideNarrationComplete(false);
     setIsSpeaking(false);
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
     if (currentAudioSourceRef.current) {
       try { 
         currentAudioSourceRef.current.onended = null;
@@ -733,7 +765,11 @@ export function LiveClassroom({
     clearCaptionTimers();
 
     setIsChalkWiping(true);
-    setTimeout(() => setIsChalkWiping(false), 900);
+    setTimeout(() => {
+      if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
+        setIsChalkWiping(false);
+      }
+    }, 900);
 
     const wb = step.whiteboardContent || step.whiteboard || step.board || {};
     const rawHeading = wb.heading || wb.title || wb.header || `Slide ${stepIdx + 1}`;
@@ -777,7 +813,7 @@ export function LiveClassroom({
     setRevealedBulletCount(1);
 
     const spoken = step.spokenDialogue || step.bubbleCaption || "";
-    if (spoken && isMountedRef.current) {
+    if (spoken && isMountedRef.current && playbackSessionIdRef.current === sessionId) {
       await playAudioWithEmotion(spoken, rawBullets, step.ttsAudio);
     }
   }, [playAudioWithEmotion, lessonData]);
@@ -853,8 +889,14 @@ export function LiveClassroom({
     fetchFreshQuiz();
   };
 
-  // Initial startup: generate or load lesson steps
+  // Initial startup: generate or load lesson steps exactly once per lesson
   useEffect(() => {
+    const lessonKey = lessonData?.id || lessonData?.title || 'active-lesson';
+    if (initializedLessonIdRef.current === lessonKey) {
+      return;
+    }
+    initializedLessonIdRef.current = lessonKey;
+
     const initLesson = async () => {
       setTimeout(() => {
         if (isMountedRef.current) setIsReady(true);
@@ -1060,18 +1102,22 @@ export function LiveClassroom({
   };
 
   const handlePrevStep = () => {
-    if (currentStepIndex > 0) {
+    if (currentStepIndex > 0 && !isSpeaking) {
       const newIdx = currentStepIndex - 1;
       setCurrentStepIndex(newIdx);
-      applyTimelineStep(timeline[newIdx], newIdx, timeline.length);
+      if (timeline[newIdx]) {
+        applyTimelineStep(timeline[newIdx], newIdx, timeline.length);
+      }
     }
   };
 
   const handleNextStep = () => {
-    if (currentStepIndex < timeline.length - 1) {
+    if (currentStepIndex < timeline.length - 1 && !isSpeaking) {
       const newIdx = currentStepIndex + 1;
       setCurrentStepIndex(newIdx);
-      applyTimelineStep(timeline[newIdx], newIdx, timeline.length);
+      if (timeline[newIdx]) {
+        applyTimelineStep(timeline[newIdx], newIdx, timeline.length);
+      }
     }
   };
 
@@ -1569,32 +1615,31 @@ export function LiveClassroom({
 
             {/* Right: Slide Step Navigation */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              {/* Prominent Blinking Next Slide Action Button after TTS Audio Completes */}
-              {isSlideNarrationComplete && currentStepIndex < timeline.length - 1 && !isQuizActive && (
+              {/* Next Slide button: Only shown once current slide narration is completely finished and teacher is NOT speaking */}
+              {!isSpeaking && isSlideNarrationComplete && currentStepIndex < timeline.length - 1 && !isQuizActive && (
                 <motion.button
                   type="button"
                   onClick={handleNextStep}
                   animate={{ 
-                    scale: [1, 1.08, 1],
-                    opacity: [1, 0.7, 1],
+                    scale: [1, 1.04, 1],
                     boxShadow: [
-                      "0 0 6px rgba(34,211,238,0.5)",
-                      "0 0 28px rgba(34,211,238,1)",
-                      "0 0 6px rgba(34,211,238,0.5)"
+                      "0 0 6px rgba(34,211,238,0.4)",
+                      "0 0 20px rgba(34,211,238,0.8)",
+                      "0 0 6px rgba(34,211,238,0.4)"
                     ]
                   }}
-                  transition={{ repeat: Infinity, duration: 0.9, ease: "easeInOut" }}
-                  className="flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-cyan-200 cursor-pointer animate-pulse"
-                  title="Narration complete! Click to advance to next slide"
+                  transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
+                  className="flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-cyan-200 cursor-pointer"
+                  title="Advance to next slide"
                 >
-                  <Sparkles className="w-3.5 h-3.5 fill-current text-amber-200 animate-spin" />
+                  <Sparkles className="w-3.5 h-3.5 fill-current text-amber-200" />
                   <span className="tracking-wide">Next Slide</span>
                   <ChevronRight className="w-4 h-4 stroke-[3]" />
                 </motion.button>
               )}
 
-              {/* End of Lesson: Prominent CTA to Take Quiz */}
-              {!isQuizActive && currentStepIndex >= timeline.length - 1 && (
+              {/* End of Lesson: Prominent CTA to Take Quiz (shown only when all slides complete and narration finished) */}
+              {!isQuizActive && currentStepIndex >= timeline.length - 1 && !isSpeaking && (
                 <motion.button
                   type="button"
                   onClick={() => {
@@ -1639,9 +1684,9 @@ export function LiveClassroom({
                 <button
                   type="button"
                   onClick={handlePrevStep}
-                  disabled={currentStepIndex <= 0}
+                  disabled={currentStepIndex <= 0 || isSpeaking}
                   className="p-1.5 rounded-full hover:bg-slate-700 disabled:opacity-30 text-white transition-colors"
-                  title="Previous Slide"
+                  title={isSpeaking ? "Narration in progress..." : "Previous Slide"}
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -1660,14 +1705,17 @@ export function LiveClassroom({
                       handleNextStep();
                     }
                   }}
+                  disabled={isSpeaking}
                   className={`p-1.5 rounded-full transition-all ${
-                    currentStepIndex >= timeline.length - 1 && !isQuizActive
+                    isSpeaking 
+                      ? 'opacity-40 cursor-not-allowed hover:bg-transparent'
+                      : currentStepIndex >= timeline.length - 1 && !isQuizActive
                       ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.9)] animate-pulse ring-2 ring-cyan-200 scale-105'
                       : isSlideNarrationComplete && currentStepIndex < timeline.length - 1
-                      ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.9)] animate-pulse ring-2 ring-cyan-200 scale-110'
+                      ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.9)] ring-2 ring-cyan-200 scale-105'
                       : 'hover:bg-slate-700 disabled:opacity-30 text-white'
                   }`}
-                  title={currentStepIndex >= timeline.length - 1 ? "Advance to Lesson Quiz" : "Next Slide"}
+                  title={isSpeaking ? "Narration in progress..." : (currentStepIndex >= timeline.length - 1 ? "Advance to Lesson Quiz" : "Next Slide")}
                 >
                   <ChevronRight className="w-4 h-4 stroke-[2.5]" />
                 </button>

@@ -1,9 +1,44 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Loader2, Sparkles, BookOpen, Brain, Lightbulb, Play, Home, CheckCircle2, BookmarkCheck } from 'lucide-react';
 import { Realistic3DDNA } from './Realistic3DDNA';
 import { useAuth } from '../firebase/authContext';
-import { AdsterraAd } from '../components/AdsterraAd';
+
+// Adsterra Production Code Placeholders
+const ADSTERRA_320X50_CODE = `<script>
+  atOptions = {
+    'key' : '666f6d3070dd9d156af424ba8c670edb',
+    'format' : 'iframe',
+    'height' : 50,
+    'width' : 320,
+    'params' : {}
+  };
+</script>
+<script src="https://bauval.org/22/666f6d3070dd9d156af424ba8c670edb"></script>`;
+
+const ADSTERRA_300X250_CODE = `<script>
+  atOptions = {
+    'key' : 'c3eeae34a18a75771d0ca2d366de6937',
+    'format' : 'iframe',
+    'height' : 250,
+    'width' : 300,
+    'params' : {}
+  };
+</script>
+<script src="https://bauval.org/22/c3eeae34a18a75771d0ca2d366de6937"></script>`;
+
+const ADSTERRA_728X90_CODE = `<script>
+  atOptions = {
+    'key' : '3a804ce1a58e844b00d6606bf43cab32',
+    'format' : 'iframe',
+    'height' : 90,
+    'width' : 728,
+    'params' : {}
+  };
+</script>
+<script src="https://bauval.org/22/3a804ce1a58e844b00d6606bf43cab32"></script>`;
+
+const ADSTERRA_SOCIAL_BAR_URL = `<script data-cfasync="false" src="https://bauval.org/14/4c54359ed7ca9dd720c3c72e2c90b90a"></script>`;
 
 interface GeneratingClassroomProps {
   lessonData: any;
@@ -284,6 +319,133 @@ export function GeneratingClassroom({
     };
   }, []);
 
+  // Dedicated Ref for Responsive Multi-Breakpoint Banner Container
+  const bannerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic Script Injection: Responsive Multi-Breakpoint Adsterra Banners & Social Bar
+  useEffect(() => {
+    // 1. Inject Adsterra Social Bar into document.body
+    const SOCIAL_BAR_SRC = "https://bauval.org/14/4c54359ed7ca9dd720c3c72e2c90b90a";
+    let socialBarScript = document.getElementById('adsterra-social-bar-script') as HTMLScriptElement | null;
+    if (!socialBarScript) {
+      socialBarScript = document.createElement('script');
+      socialBarScript.id = 'adsterra-social-bar-script';
+      socialBarScript.setAttribute('data-cfasync', 'false');
+      socialBarScript.src = SOCIAL_BAR_SRC;
+      socialBarScript.async = true;
+      document.body.appendChild(socialBarScript);
+    }
+
+    // 2. Select appropriate banner format based on viewport width
+    // Small Mobile (< 480px): 320x50 Mobile Leaderboard
+    // Large Mobile / Tablet (480px to 767px): 300x250 Medium Rectangle
+    // Desktop / Wide Screens (>= 768px): 728x90 Leaderboard
+    const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    let adUnit = {
+      key: '3a804ce1a58e844b00d6606bf43cab32',
+      width: 728,
+      height: 90
+    };
+
+    if (screenWidth < 480) {
+      adUnit = {
+        key: '666f6d3070dd9d156af424ba8c670edb',
+        width: 320,
+        height: 50
+      };
+    } else if (screenWidth < 768) {
+      adUnit = {
+        key: 'c3eeae34a18a75771d0ca2d366de6937',
+        width: 300,
+        height: 250
+      };
+    }
+
+    // 3. Inject responsive banner inside isolated sandbox iframe into container
+    const container = bannerContainerRef.current;
+    if (container) {
+      container.innerHTML = '';
+      const iframe = document.createElement('iframe');
+      iframe.width = `${adUnit.width}`;
+      iframe.height = `${adUnit.height}`;
+      iframe.style.width = `${adUnit.width}px`;
+      iframe.style.height = `${adUnit.height}px`;
+      iframe.style.border = 'none';
+      iframe.style.overflow = 'hidden';
+      iframe.scrolling = 'no';
+      iframe.setAttribute('frameborder', '0');
+      container.appendChild(iframe);
+
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (doc) {
+          doc.open();
+          doc.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  html, body { width: 100%; height: 100%; background: transparent; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+                </style>
+              </head>
+              <body>
+                <script type="text/javascript">
+                  atOptions = {
+                    'key' : '${adUnit.key}',
+                    'format' : 'iframe',
+                    'height' : ${adUnit.height},
+                    'width' : ${adUnit.width},
+                    'params' : {}
+                  };
+                </script>
+                <script type="text/javascript" src="https://bauval.org/22/${adUnit.key}"></script>
+              </body>
+            </html>
+          `);
+          doc.close();
+        }
+      } catch (err) {
+        console.warn("Could not write to ad iframe:", err);
+      }
+    }
+
+    // 4. Complete cleanup function on unmount
+    return () => {
+      // Remove Social Bar script from document.body
+      if (socialBarScript && socialBarScript.parentNode) {
+        socialBarScript.parentNode.removeChild(socialBarScript);
+      }
+      document.querySelectorAll(`script[src*="4c54359ed7ca9dd720c3c72e2c90b90a"]`).forEach(s => s.remove());
+
+      // Clear banner container
+      if (container) {
+        container.innerHTML = '';
+      }
+
+      // Ad-Free Guarantee: Remove all floating overlays, popups, and lightboxes from DOM
+      const adsterraSelectors = [
+        '[id*="adsterra"]',
+        '[class*="adsterra"]',
+        '[id*="at-cv-lightbox"]',
+        '.at-cv-overlay',
+        '[class*="at-cv"]',
+        'div[style*="z-index: 2147483647"]',
+        'div[style*="z-index: 9999999"]',
+        'iframe[src*="bauval.org"]'
+      ];
+      document.querySelectorAll(adsterraSelectors.join(', ')).forEach(el => {
+        try {
+          if (el.id !== 'root' && !el.closest('#root')) {
+            el.remove();
+          }
+        } catch (e) {}
+      });
+    };
+  }, []);
+
   const topicName = lessonData?.config?.topic || lessonData?.title || "Your Custom Topic";
 
   return (
@@ -399,12 +561,19 @@ export function GeneratingClassroom({
           )}
         </div>
 
-        {/* Adsterra Native Placement directly below generation box */}
-        <div 
-          className="w-full flex justify-center items-center mt-6 pt-2 pb-8 overflow-visible shrink-0"
-          style={{ touchAction: 'pan-y' }}
-        >
-          <AdsterraAd className="max-w-xl" />
+        {/* Dedicated Adsterra Multi-Breakpoint Banner Container & Social Bar */}
+        <div className="w-full max-w-4xl mt-6 pt-2 pb-6 flex flex-col items-center shrink-0">
+          <p className="text-[11px] font-medium tracking-wider text-slate-400 uppercase mb-2 text-center">
+            📢 Sponsored Content
+          </p>
+          <div 
+            ref={bannerContainerRef}
+            id="adsterra-banner-container"
+            className={`min-h-[50px] flex items-center justify-center rounded-xl transition-all ${
+              isDarkMode ? 'bg-slate-900/40 border border-slate-800/80' : 'bg-slate-100/70 border border-slate-200'
+            }`}
+            style={{ touchAction: 'pan-y' }}
+          />
         </div>
 
       </div>
