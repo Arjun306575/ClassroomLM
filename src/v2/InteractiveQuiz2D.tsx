@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   CheckCircle2, XCircle, HelpCircle, RotateCcw, 
-  Sparkles, Award, ArrowRight, Loader2, BookOpen, RefreshCw
+  Sparkles, Award, ArrowRight, Loader2, BookOpen, RefreshCw, Zap
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -20,6 +20,7 @@ interface InteractiveQuiz2DProps {
   onRetakeQuiz: () => void;
   onGenerateFreshQuiz?: () => void;
   onReturnToSlides: () => void;
+  onLaunchMiniGame?: () => void;
 }
 
 export function InteractiveQuiz2D({
@@ -30,15 +31,74 @@ export function InteractiveQuiz2D({
   onSubmitQuiz,
   onRetakeQuiz,
   onGenerateFreshQuiz,
-  onReturnToSlides
+  onReturnToSlides,
+  onLaunchMiniGame
 }: InteractiveQuiz2DProps) {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [displayScore, setDisplayScore] = useState(0);
+  const [displayPercentage, setDisplayPercentage] = useState(0);
+  const [isCounting, setIsCounting] = useState(false);
 
   const totalQuestions = questions.length;
   const answeredCount = Object.keys(selectedAnswers).length;
   const allAnswered = totalQuestions > 0 && answeredCount === totalQuestions;
+
+  // Gamified count-up animation when quiz is submitted
+  useEffect(() => {
+    if (!isSubmitted) {
+      setDisplayScore(0);
+      setDisplayPercentage(0);
+      setIsCounting(false);
+      return;
+    }
+
+    setIsCounting(true);
+    const targetScore = score;
+    const targetPercentage = totalQuestions > 0 ? Math.round((targetScore / totalQuestions) * 100) : 0;
+    
+    const startTime = performance.now();
+    const duration = 1300; // ms for satisfying gamified count-up
+
+    let animId: number;
+
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // Cubic ease-out for energetic deceleration
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+
+      const currentScore = Math.round(easeOut * targetScore);
+      const currentPct = Math.round(easeOut * targetPercentage);
+
+      setDisplayScore(currentScore);
+      setDisplayPercentage(currentPct);
+
+      if (progress < 1) {
+        animId = requestAnimationFrame(step);
+      } else {
+        setDisplayScore(targetScore);
+        setDisplayPercentage(targetPercentage);
+        setIsCounting(false);
+        // Secondary celebratory confetti pop upon completing score count-up
+        if (targetScore > 0) {
+          try {
+            confetti({
+              particleCount: targetScore === totalQuestions ? 80 : 45,
+              spread: 70,
+              origin: { y: 0.55 }
+            });
+          } catch (e) {}
+        }
+      }
+    };
+
+    animId = requestAnimationFrame(step);
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [isSubmitted, score, totalQuestions]);
 
   const handleSelectOption = (qIdx: number, oIdx: number) => {
     if (isSubmitted) return;
@@ -57,10 +117,10 @@ export function InteractiveQuiz2D({
     setIsSubmitted(true);
     onSubmitQuiz(correctCount, totalQuestions);
 
-    // Launch celebratory confetti burst
+    // Initial celebratory confetti burst
     try {
       confetti({
-        particleCount: correctCount === totalQuestions ? 100 : 65,
+        particleCount: correctCount === totalQuestions ? 100 : 50,
         spread: 80,
         origin: { y: 0.6 }
       });
@@ -73,6 +133,9 @@ export function InteractiveQuiz2D({
     setSelectedAnswers({});
     setIsSubmitted(false);
     setScore(0);
+    setDisplayScore(0);
+    setDisplayPercentage(0);
+    setIsCounting(false);
     onRetakeQuiz();
   };
 
@@ -80,6 +143,9 @@ export function InteractiveQuiz2D({
     setSelectedAnswers({});
     setIsSubmitted(false);
     setScore(0);
+    setDisplayScore(0);
+    setDisplayPercentage(0);
+    setIsCounting(false);
     if (onGenerateFreshQuiz) {
       onGenerateFreshQuiz();
     } else {
@@ -140,13 +206,23 @@ export function InteractiveQuiz2D({
             </h2>
             <p className="text-[11px] text-cyan-300/80 font-medium">
               {isSubmitted 
-                ? `Completed · Score: ${score}/${totalQuestions} (${scorePercentage}%)`
+                ? `Completed · Score: ${displayScore}/${totalQuestions} (${displayPercentage}%)`
                 : `${totalQuestions} Questions · Answered ${answeredCount} of ${totalQuestions}`}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {onLaunchMiniGame && (
+            <button
+              onClick={onLaunchMiniGame}
+              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-400 via-pink-500 to-indigo-500 hover:from-amber-300 hover:to-indigo-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 ring-1 ring-amber-300 cursor-pointer"
+              title="Play 60s Beat the Bot mini-game!"
+            >
+              <Zap className="w-3.5 h-3.5 fill-current text-slate-950" />
+              <span>Beat the Bot</span>
+            </button>
+          )}
           <button
             onClick={onReturnToSlides}
             className="px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-700"
@@ -158,35 +234,73 @@ export function InteractiveQuiz2D({
         </div>
       </div>
 
-      {/* Score Summary Banner (When Submitted) */}
+      {/* Score Summary Banner (When Submitted with Gamified Count-Up Animation) */}
       <AnimatePresence>
         {isSubmitted && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
+            initial={{ opacity: 0, y: -15, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, height: 0 }}
-            className={`px-4 sm:px-6 py-3.5 border-b shrink-0 flex items-center justify-between gap-3 ${
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className={`px-4 sm:px-6 py-3 border-b shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3.5 shadow-lg ${
               score === totalQuestions
-                ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-200'
+                ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-200'
                 : score >= totalQuestions * 0.7
-                ? 'bg-cyan-950/70 border-cyan-500/40 text-cyan-200'
-                : 'bg-amber-950/70 border-amber-500/40 text-amber-200'
+                ? 'bg-cyan-950/80 border-cyan-500/40 text-cyan-200'
+                : 'bg-amber-950/80 border-amber-500/40 text-amber-200'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl sm:text-3xl">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <motion.span 
+                initial={{ scale: 0, rotate: -25 }}
+                animate={{ scale: [0, 1.3, 1], rotate: [0, -10, 0] }}
+                transition={{ type: "spring", stiffness: 350, damping: 18 }}
+                className="text-2xl sm:text-3xl shrink-0"
+              >
                 {score === totalQuestions ? '🏆' : score >= totalQuestions * 0.7 ? '🎉' : '💡'}
-              </span>
-              <div>
-                <p className="text-xs sm:text-sm font-black">
+              </motion.span>
+
+              {/* Gamified Score Metric Counter Badge */}
+              <div className="flex items-center gap-2.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/10 shrink-0 shadow-inner">
+                <div className="flex flex-col items-center">
+                  <span className="text-xl sm:text-2xl font-black font-mono tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-cyan-300 to-emerald-300 leading-none">
+                    {displayScore}
+                    <span className="text-xs font-semibold text-slate-400">/{totalQuestions}</span>
+                  </span>
+                  <span className="text-[9px] font-bold text-cyan-300 uppercase tracking-widest mt-0.5">
+                    {isCounting ? 'Counting...' : 'Score'}
+                  </span>
+                </div>
+                <div className="w-px h-7 bg-white/10" />
+                <div className="flex flex-col min-w-[65px]">
+                  <span className="text-xs sm:text-sm font-black font-mono text-cyan-200 leading-tight">
+                    {displayPercentage}%
+                  </span>
+                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1 border border-white/10">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-150 ${
+                        score === totalQuestions 
+                          ? 'bg-gradient-to-r from-emerald-400 to-teal-300 shadow-[0_0_8px_rgba(52,211,153,0.8)]' 
+                          : score >= totalQuestions * 0.7 
+                          ? 'bg-gradient-to-r from-cyan-400 to-indigo-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]' 
+                          : 'bg-gradient-to-r from-amber-400 to-orange-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]'
+                      }`}
+                      style={{ width: `${displayPercentage}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-black truncate">
                   {score === totalQuestions
                     ? 'Perfect Score! 100% Mastery!'
                     : score >= totalQuestions * 0.7
                     ? 'Great Work! Solid Understanding!'
                     : 'Good Effort! Review Explanations Below!'}
                 </p>
-                <p className="text-[11px] opacity-80 font-medium">
-                  You scored {score} out of {totalQuestions} ({scorePercentage}%). Review detailed answer explanations below.
+                <p className="text-[11px] opacity-85 font-medium">
+                  You scored <span className="font-bold text-white">{displayScore}</span> out of {totalQuestions} ({displayPercentage}%). Review detailed answer explanations below.
                 </p>
               </div>
             </div>
@@ -389,6 +503,17 @@ export function InteractiveQuiz2D({
                 >
                   <RefreshCw className="w-4 h-4 text-cyan-300" />
                   <span>Fresh Quiz</span>
+                </button>
+              )}
+              {onLaunchMiniGame && (
+                <button
+                  type="button"
+                  onClick={onLaunchMiniGame}
+                  className="flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-pink-500 to-indigo-500 hover:from-amber-300 hover:to-indigo-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ring-2 ring-amber-300 cursor-pointer"
+                  title="Challenge yourself in the 60s Beat the Bot rapid-fire trivia round!"
+                >
+                  <Zap className="w-4 h-4 fill-current text-slate-950" />
+                  <span>Beat the Bot (60s)</span>
                 </button>
               )}
               <button

@@ -1,121 +1,86 @@
-# ClassroomLM: Credit Quota Hardening, Username-Based Auth & Sustainable Ad Layout
+# Implementation Plan - AI Quiz Show: Beat the Bot & Dark Mode Ad Captions
 
-Implement quota safeguards to prevent daily generation credits from exceeding 100 (+50 top up restricted when balance > 50 and gated for authenticated users), streamline account creation with clean username input without '@' and duplicate username alerts, and eliminate excess whitespace below homepage ads sustainably without `overflow: hidden`.
-
-## User Review & Critical Decisions
-
-> [!IMPORTANT]
-> The following architectural decisions were confirmed based on user feedback:
-> - **Top Up Credit Hard Cap (Max 100)**: Users with more than 50 credits cannot top up (+50 would exceed 100 quota). The CTA button is disabled and clearly labeled `Max 100 Credits Reached` with a helper badge explaining that credits must be spent before topping up.
-> - **Guest User Gating**: Guests cannot top up generation credits. The modal displays a dedicated `Sign In to Claim +50 Credits` action button that smoothly opens the authentication flow.
-> - **Username Without '@' for Signup & Signin**: The auth form accepts a clean student username without requiring '@' or triggering HTML5 email validation tooltips. Internally, accounts map to sanitized student credentials, and duplicate registrations display a clear warning: `This name already exists. Please choose a different username or sign in.`
-> - **Sustainable Ad Height Measurement**: Excess whitespace below the homepage ads is eliminated by measuring the true bounding rect of the rendered ad cards (`getDeepestBottom`), removing reliance on `document.documentElement.scrollHeight` which causes compounding height inflation, without using `overflow: hidden`.
+Build the `AiQuizGame.tsx` 60-second rapid-fire trivia mini-game ("AI Quiz Show: Beat the Bot!") for ClassroomLM, wire up its launch flow after lesson completion and on the quiz screen, grant 2 Free AI Searches (for the current day) upon scoring 5/5, and fix the contrast of Adsterra ads' captions in dark mode.
 
 ---
 
-## 1. Overview & Core Concept
+## 1. Dark Mode Ad Caption Visibility Fix
+### Problem:
+In dark mode, Adsterra ads' captions (`text-slate-400` / `dark:text-slate-500`) blend into dark slate backgrounds (`#090d16` and `#0f172a`), making them difficult or impossible to read.
 
-- **What It Does**: 
-  1. Enforces strict quota protection on the Adsterra Smartlink credit engine: only authenticated users with $\le 50$ credits can trigger the reward, preventing balance overflow past 100.
-  2. Simplifies student onboarding by replacing standard email inputs with intuitive username-based authentication that never asks for "@".
-  3. Ensures immediate feedback if a chosen student username is already registered (`This name already exists`).
-  4. Optimizes the homepage native ad container so the space below ads fits snugly without compounding gaps or mobile scroll lag.
-- **Target Audience**: K-12 and university students accessing AI lessons, visual scan problem-solving, and chalkboard search.
-- **Key Value**: Fair-use monetization protection, friction-free student signups, and a polished, tight homepage layout.
-
----
-
-## 2. User Experience & Visual Design
-
-### Key User Flows
-
-```
-[Student Visits Top Up Modal]
-       │
-       ├── Is Guest? ────────────────────────► Shows "Sign In to Claim +50 Credits" CTA
-       │                                        └── Click opens AuthModal in signin/signup mode
-       │
-       ├── Has > 50 Credits (e.g. 75)? ───────► Button Disabled: "⚡ Max 100 Credits Reached"
-       │                                        └── Badge: "Spend credits before topping up"
-       │
-       └── Has <= 50 Credits & Signed In? ───► Button Active: "⚡ Get 50 Free Credits"
-                                                └── Click grants +50, triggers 30s anti-spam timer
-
-[Student Creates Account (Sign Up)]
-       │
-       ├── Input field labeled "Username" (type="text", placeholder="e.g. alex2026")
-       ├── No "@" required, no browser tooltips demanding "@"
-       └── If username already taken:
-             └── Instant Alert: "This name already exists. Please choose a different username."
-```
-
-### Visual Identity & Theme
-- **Theme Consistency**: High-contrast dark theme matching ClassroomLM (`bg-slate-900`, `border-slate-700/80`, `text-white`).
-- **Quota Cap Indicators**: Amber/slate muted disabled state for the top-up CTA with lock/clock iconography when balance > 50.
-- **Input Styling**: Neutral background (`bg-slate-800 border-slate-700`), blue focus ring, leading icon (`User`), no HTML5 browser email tooltip popups.
-- **Adsterra Container**: Tightly bounded container with zero excessive bottom margin (`mb-2` instead of inflating padding), maintaining `touch-action: pan-y` for mobile fluidity.
+### Solution:
+- In `src/v2/GeneratingClassroom.tsx`, update the `📢 Sponsored Content` caption to `text-[11px] font-semibold tracking-wider text-slate-300 dark:text-slate-200 uppercase mb-2 text-center` with an enhanced high-contrast text tone.
+- In `src/components/AdsterraAd.tsx`, replace `dark:text-slate-500` with `dark:text-slate-200 font-semibold` so the "Sponsored" label remains crisp and clearly legible in dark mode.
+- In `src/v2/AiQuizGame.tsx`, adopt the same high-contrast styling for the Results Screen Adsterra 300x250 banner heading.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+## 2. New Component: `AiQuizGame.tsx` ("AI Quiz Show: Beat the Bot!")
+Create `src/v2/AiQuizGame.tsx` adhering to ClassroomLM's sleek, dark-themed UI (slate backgrounds, indigo/violet/cyan accent gradients, crisp typography, and smooth transitions):
 
-- **Decision 1: Quota Ceiling Enforcement (>50 Credits)**
-  - *Chosen Approach*: Button disabled when `credits > 50`, accompanied by status indicator `Max 100 Credits Reached`. Backend/context credit addition checks `Math.min(DAILY_CREDITS_QUOTA, current + 50)`.
-  - *Why*: Eliminates credit hoarding and guarantees compliance with the 100 daily quota rule.
-- **Decision 2: Username Mapping Strategy**
-  - *Chosen Approach*: Accept student username input and map internally to `${sanitizedUsername}@classroomlm.app` when communicating with Firebase Auth, while displaying the pure student username in all UI components and Firestore user profile documents.
-  - *Why*: Firebase Auth requires an email format under the hood, but students should never be forced to type "@" or have an actual email address.
-- **Decision 3: Eliminating Ad Space Without `overflow: hidden`**
-  - *Chosen Approach*: Inside the isolated iframe, replace `Math.max(b.scrollHeight, docElem.scrollHeight)` with the exact deepest coordinate of rendered ad elements (`getDeepestBottom`). Prevent compounding height inflation where the iframe height expanded its own document's scroll height.
-  - *Why*: `overflow: hidden` would clip drop-shadows or 4th ad content on varying viewports. Exact coordinate tracking fits the ad perfectly with zero lag.
+### Game Flow & State:
+- **Input**:
+  - `questions: QuizQuestion[]` (array of questions with options and `correctIndex`).
+  - `onClose: () => void`: callback to exit the mini-game.
+  - `onClaimBonus: (credits: number, wonFreeSearches: boolean) => void`: callback when claiming rewards.
+  - `mascotVoice / language`: optional config for teacher emotion quips.
+- **60-Second Countdown Timer**:
+  - Prominent countdown ring / progress bar at the top displaying remaining seconds with dynamic color transitions (cyan -> amber -> rose under 10 seconds).
+  - Ticking sound effect / visual pulse under 10 seconds.
+  - Automatic transition to Results Screen when time reaches 0.
+- **Rapid-Fire Gameplay**:
+  - Displays 1 question at a time with 4 styled options.
+  - **Correct Answer**:
+    - Score increments (+10 points).
+    - Teacher avatar displays happy/celebrating reaction with an encouraging quip ("Bullseye!", "Lightning fast!").
+    - Confetti micro-burst, then moves to next question.
+  - **Incorrect Answer**:
+    - Selected option turns red, correct option highlights green.
+    - Teacher avatar displays gentle explaining/thinking reaction.
+    - Automatically advances after 1 second.
+
+### Results & Monetization Screen:
+- Shows final score (e.g. `50 pts`), questions answered correctly out of total (e.g. `5 / 5`).
+- **Reward Card**:
+  - When the user scores **5 out of 5**: Special unlocked badge: `"🎉 Perfect 5/5! 2 Free AI Searches Unlocked Today! ⚡"`.
+  - General bonus: `"+25 Bonus Credits"`.
+- **Adsterra 300x250 Banner Ad**:
+  - Subtitle heading with dark-mode high-contrast caption:
+    ```html
+    <p className="text-[11px] font-semibold tracking-wider text-slate-300 dark:text-slate-200 uppercase mb-2 text-center">
+      📢 Sponsored Content
+    </p>
+    ```
+  - Placeholder constant `ADSTERRA_300X250_CODE` with key `c3eeae34a18a75771d0ca2d366de6937`.
+  - Injected via `useEffect` into an ad container ref with complete cleanup on unmount.
+- **Action Buttons**:
+  - Primary: `"⚡ Claim Bonus Credits & Return"`
+  - Secondary: `"⚡ Top Up Credits to Play Again"` linking to smartlink `https://araplhn.org/4/1318a0beea33cd491f0b903cf1be47fd`.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+## 3. Free AI Searches Daily Reward Integration
+- Store daily free searches in local storage & user state:
+  `localStorage.getItem('classroomlm_daily_free_ai_searches')` storing `{ date: 'YYYY-MM-DD', remaining: 2 }`.
+- In `src/v2/LandingPage.tsx`:
+  - When `handleSearchSubmit` runs:
+    - Check if `remaining > 0` and `date === currentDayDate`.
+    - If active: bypass normal credit deduction, decrement `remaining`, and show a banner/toast: `"⚡ Free AI Search Pass Applied! (X remaining today)"`.
 
-### Component & System Diagram
+---
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                               ClassroomLM                              │
-├───────────────────────────────────┬────────────────────────────────────┤
-│           Credit Modal            │             Auth Modal             │
-│   (src/components/CreditModal)    │     (src/components/AuthModal)     │
-├───────────────────────────────────┼────────────────────────────────────┤
-│ • Guest check: !currentUser       │ • Input type="text" (Username)     │
-│   -> "Sign In to Claim" CTA       │ • Strips '@' requirement           │
-│ • Quota check: credits > 50       │ • Maps to @classroomlm.app internally│
-│   -> Disabled "Max 100 Reached"   │ • Catches auth/email-already-in-use │
-│ • Valid click: +50 credits (<=100)│   -> "This name already exists"    │
-└─────────────────┬─────────────────┴──────────────────┬─────────────────┘
-                  │                                    │
-                  ▼                                    ▼
-       ┌─────────────────────┐              ┌────────────────────┐
-       │   Adsterra Banner   │              │ Firebase Auth/Store│
-       │ (src/components/    │              │ (src/firebase/     │
-       │    AdsterraAd.tsx)  │              │    authContext)    │
-       ├─────────────────────┤              ├────────────────────┤
-       │ • getDeepestBottom()│              │ • sanitizeUsername │
-       │ • No compounding gap│              │ • credit limits    │
-       │ • No overflow:hidden│              │ • duplicate alerts │
-       └─────────────────────┘              └────────────────────┘
-```
+## 4. Launch Triggers in ClassroomLM
+- In `src/v2/LiveClassroom.tsx`:
+  - **Lesson Completion**: When reaching the final slide and narration finishes, display `"🤖 Beat the Bot (60s Mini-Game)"` next to `"Take Lesson Quiz"`.
+  - **Quiz Screen**: On `InteractiveQuiz2D.tsx` (top bar and completion banner), add a glowing `"⚡ Beat the Bot!"` button allowing students to challenge the rapid-fire quiz.
+- Mount `AiQuizGame` seamlessly inside `LiveClassroom.tsx` with smooth overlay transitions.
 
-### Key Implementation Steps
+---
 
-1. **Credit Modal & Quota Gating (`CreditModal.tsx`)**:
-   - Check `currentUser`: If guest, render a primary button: `🔐 Sign In to Top Up Credits`, which calls `onClose()` and `openAuthModal()`.
-   - Check `credits > 50`: If credits > 50, render disabled button: `⚡ Max 100 Credits Reached` with explanation badge: `Your balance is {credits}/100. Spend credits before topping up.`
-   - In `handleClaimCredits`: Enforce `if (!currentUser || credits > 50) return;`.
-
-2. **Username Authentication & Error Handling (`AuthModal.tsx` & `authContext.tsx`)**:
-   - Change input `type="email"` to `type="text"`, label to `"Username"`, placeholder to `"e.g. satyam or alex2026"`.
-   - In `signInWithEmail` and `signUpWithEmail`, if the value does not include `@`, append `@classroomlm.app` automatically.
-   - When Firebase throws `auth/email-already-in-use`, display exact user warning: `"This name already exists. Please choose a different username or sign in."`
-   - Ensure the student's display name and profile reflect their clean username without `@classroomlm.app`.
-
-3. **Homepage Adsterra Height Optimization (`AdsterraAd.tsx` & `LandingPage.tsx`)**:
-   - In `AdsterraAd.tsx` iframe script, compute height strictly from `getDeepestBottom()` of rendered elements inside `#container-f93109a9ce4a4227b16a6d92e94a8b1f`.
-   - Remove `b.scrollHeight` and `docElem.scrollHeight` fallback from the calculation, as these reflect the current iframe height and cause compounding growth.
-   - Set a clean +12px bottom spacing rather than +35px to prevent excess empty space below the ads.
-   - Verify layout stability on both mobile and desktop screens without `overflow: hidden`.
+## 5. Verification & Testing
+1. Verify `GeneratingClassroom.tsx` and `AdsterraAd.tsx` captions are bright and legible in dark mode.
+2. Launch "Beat the Bot" mini-game from lesson completion and quiz screen.
+3. Test 60-second countdown, question progression, teacher avatar reactions, and game-over transitions.
+4. Verify Adsterra 300x250 banner injection and unmount cleanup.
+5. Verify 5/5 score unlocks 2 Free AI Searches for the day without deducting credits in AI Search.
+6. Run `lint_applet` and `compile_applet`.

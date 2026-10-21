@@ -478,102 +478,119 @@ export function GeneratingClassroom({
       <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/15 rounded-full blur-[120px] pointer-events-none" />
 
       {/* Center Generation Card */}
-      <div className="z-10 text-center max-w-xl w-full flex flex-col items-center">
+      <div className="z-10 w-full max-w-xl lg:max-w-5xl flex flex-col items-center">
         
-        {/* 3D Realistic DNA Animation */}
-        <div className="relative mb-2">
-          <Realistic3DDNA />
-        </div>
-
-        {/* Status Heading */}
-        <motion.div 
-          key={isDone ? 'ready' : 'generating'}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="mb-6"
-        >
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-2">
-            {isDone ? "Classroom Ready" : "Generating Classroom..."}
-          </h1>
-          <p className={`text-base md:text-lg font-medium max-w-md mx-auto truncate px-4 ${
-            isDarkMode ? 'text-cyan-300' : 'text-indigo-600'
-          }`}>
-            "{topicName}"
-          </p>
-        </motion.div>
-
-        {/* Dynamic Progress Steps */}
-        <div className={`w-full p-4 rounded-2xl border mb-8 flex flex-col gap-2.5 ${
-          isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white/80 border-slate-200 shadow-md'
-        }`}>
-          {steps.map((st, idx) => {
-            const Icon = st.icon;
-            const isCompleted = isDone || generationStep > idx;
-            const isCurrent = !isDone && generationStep === idx;
-
-            return (
-              <div 
-                key={idx}
-                className={`flex items-center justify-between px-3.5 py-2 rounded-xl transition-all ${
-                  isCurrent 
-                    ? (isDarkMode ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800/40' : 'bg-cyan-50 text-cyan-800 border border-cyan-200')
-                    : isCompleted
-                      ? (isDarkMode ? 'text-emerald-400 opacity-80' : 'text-emerald-600 opacity-90')
-                      : 'opacity-40 text-slate-400'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${isCurrent ? 'animate-pulse text-cyan-400' : ''}`} />
-                  <span className="text-xs sm:text-sm font-semibold text-left">{st.label}</span>
-                </div>
-                {isCompleted ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                ) : isCurrent ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-                ) : (
-                  <div className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Action Button: Auto-active once ready */}
-        <div className="w-full flex justify-center">
-          {isDone ? (
-            <motion.button 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.96 }}
-              onClick={onEnter}
-              className="px-8 py-4 bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white rounded-full font-black text-lg flex items-center gap-3 shadow-[0_0_35px_rgba(99,102,241,0.5)] transition-all cursor-pointer"
-            >
-              <Play className="w-6 h-6 fill-current" />
-              <span>Enter Live Classroom</span>
-            </motion.button>
-          ) : (
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-              <span>Synthesizing chalkboard & voice curriculum...</span>
+        {/* Main Responsive Grid: 1 column on mobile, 2 balanced columns on desktop */}
+        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center mb-6">
+          
+          {/* Left Column: 3D DNA + Status Heading + Enter Classroom Button */}
+          <div className="flex flex-col items-center text-center">
+            {/* 3D Realistic DNA Animation */}
+            <div className="relative mb-2">
+              <Realistic3DDNA />
             </div>
-          )}
-        </div>
 
-        {/* Dedicated Adsterra Multi-Breakpoint Banner Container & Social Bar */}
-        <div className="w-full max-w-4xl mt-6 pt-2 pb-6 flex flex-col items-center shrink-0">
-          <p className="text-[11px] font-medium tracking-wider text-slate-400 uppercase mb-2 text-center">
-            📢 Sponsored Content
-          </p>
-          <div 
-            ref={bannerContainerRef}
-            id="adsterra-banner-container"
-            className={`min-h-[50px] flex items-center justify-center rounded-xl transition-all ${
-              isDarkMode ? 'bg-slate-900/40 border border-slate-800/80' : 'bg-slate-100/70 border border-slate-200'
-            }`}
-            style={{ touchAction: 'pan-y' }}
-          />
+            {/* Status Heading */}
+            <motion.div 
+              key={isDone ? 'ready' : 'generating'}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mb-6"
+            >
+              <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-2">
+                {isDone ? "Classroom Ready" : "Generating Classroom..."}
+              </h1>
+              <p className={`text-base md:text-lg font-medium max-w-md mx-auto truncate px-4 ${
+                isDarkMode ? 'text-cyan-300' : 'text-indigo-600'
+              }`}>
+                "{topicName}"
+              </p>
+            </motion.div>
+
+            {/* Action Button: Auto-active once ready */}
+            <div className="w-full flex justify-center">
+              {isDone ? (
+                <motion.button 
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={onEnter}
+                  className="px-8 py-4 bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white rounded-full font-black text-lg flex items-center gap-3 shadow-[0_0_35px_rgba(99,102,241,0.5)] transition-all cursor-pointer"
+                >
+                  <Play className="w-6 h-6 fill-current" />
+                  <span>Enter Live Classroom</span>
+                </motion.button>
+              ) : (
+                <div className="flex items-center gap-3 text-xs text-slate-400">
+                  <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                  <span>Synthesizing chalkboard & voice curriculum...</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Dynamic Progress Steps Card & Sponsored Banner */}
+          <div className="flex flex-col items-center w-full">
+            {/* Dynamic Progress Steps */}
+            <div className={`w-full p-5 rounded-3xl border mb-5 flex flex-col gap-3 shadow-lg ${
+              isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/90 border-slate-200 shadow-md'
+            }`}>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800/80">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Classroom Synthesis</span>
+                <span className="text-xs font-bold text-cyan-400">
+                  {isDone ? 'Complete (100%)' : `${Math.min(100, (generationStep + 1) * 20)}%`}
+                </span>
+              </div>
+              {steps.map((st, idx) => {
+                const Icon = st.icon;
+                const isCompleted = isDone || generationStep > idx;
+                const isCurrent = !isDone && generationStep === idx;
+
+                return (
+                  <div 
+                    key={idx}
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                      isCurrent 
+                        ? (isDarkMode ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800/40' : 'bg-cyan-50 text-cyan-800 border border-cyan-200')
+                        : isCompleted
+                          ? (isDarkMode ? 'text-emerald-400 opacity-80' : 'text-emerald-600 opacity-90')
+                          : 'opacity-40 text-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={`w-4 h-4 ${isCurrent ? 'animate-pulse text-cyan-400' : ''}`} />
+                      <span className="text-xs sm:text-sm font-semibold text-left">{st.label}</span>
+                    </div>
+                    {isCompleted ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : isCurrent ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
+                    ) : (
+                      <div className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Dedicated Adsterra Multi-Breakpoint Banner Container & Social Bar */}
+            <div className="w-full flex flex-col items-center shrink-0">
+              <p className="text-[11px] font-semibold tracking-wider text-slate-300 dark:text-slate-200 uppercase mb-2 text-center drop-shadow-sm select-none">
+                📢 Sponsored Content
+              </p>
+              <div 
+                ref={bannerContainerRef}
+                id="adsterra-banner-container"
+                className={`min-h-[50px] w-full flex items-center justify-center rounded-2xl transition-all ${
+                  isDarkMode ? 'bg-slate-900/40 border border-slate-800/80' : 'bg-slate-100/70 border border-slate-200'
+                }`}
+                style={{ touchAction: 'pan-y' }}
+              />
+            </div>
+          </div>
+
         </div>
 
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, Video, Users, Star, Pin, X, ChevronRight, Menu, Play, Presentation, MessageSquare, Coffee, Search, Bell, Wand2, Camera, Image as ImageIcon, Sparkles, Moon, Sun, Maximize2, Minimize2, User, GraduationCap, Globe, Bookmark, Trash2, ArrowUpRight, LogIn, Zap, AlertTriangle, Check, FileText, Upload, Shield } from 'lucide-react';
+import { BookOpen, Video, Users, Star, Pin, X, ChevronRight, Menu, Play, Presentation, MessageSquare, Coffee, Search, Bell, Wand2, Camera, Image as ImageIcon, Sparkles, Moon, Sun, Maximize2, Minimize2, User, GraduationCap, Globe, Bookmark, Trash2, ArrowUpRight, LogIn, Zap, AlertTriangle, Check, CheckCircle2, FileText, Upload, Shield } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -22,6 +22,7 @@ import { executeRecaptcha, loadRecaptchaScript } from '../firebase/recaptcha';
 import { AdsterraAd } from '../components/AdsterraAd';
 import { CreditModal } from '../components/CreditModal';
 import { photosynthesisLesson } from '../data/sampleLessons/photosynthesis';
+import { getFreeAISearchesRemaining, useFreeAISearch, FREE_SEARCHES_EVENT } from '../utils/freePasses';
 
 interface LandingPageProps {
   onGenerate: (config: any) => void;
@@ -87,6 +88,19 @@ export function LandingPage({
     return "English";
   });
   const [legalContent, setLegalContent] = useState<string | null>(null);
+  const [freeSearchesRemaining, setFreeSearchesRemaining] = useState<number>(() => getFreeAISearchesRemaining());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setFreeSearchesRemaining(getFreeAISearchesRemaining());
+    };
+    window.addEventListener(FREE_SEARCHES_EVENT, handleUpdate);
+    window.addEventListener('focus', handleUpdate);
+    return () => {
+      window.removeEventListener(FREE_SEARCHES_EVENT, handleUpdate);
+      window.removeEventListener('focus', handleUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -224,12 +238,25 @@ export function LandingPage({
       return;
     }
 
-    // High-Cost Credit Pricing: 10 Credits per AI Search
-    const creditRes = await deductCredits(CREDIT_COSTS.AI_SEARCH, 'AI Search');
-    if (!creditRes.success) {
-      setSearchResult(creditRes.error || "Insufficient credits. AI Search requires 10 credits. Your 100 credits will refresh tomorrow at 00:00 UTC.");
-      setSearchState('result');
-      return;
+    // Check if user has free AI Search passes for today earned via Beat the Bot (5/5 score)!
+    const freeSearchesLeft = getFreeAISearchesRemaining();
+    if (freeSearchesLeft > 0) {
+      useFreeAISearch();
+      setFreeSearchesRemaining(getFreeAISearchesRemaining());
+    } else {
+      // High-Cost Credit Pricing: 10 Credits per AI Search
+      const creditRes = await deductCredits(CREDIT_COSTS.AI_SEARCH, 'AI Search');
+      if (!creditRes.success) {
+        setSearchResult(creditRes.error || "Insufficient credits. AI Search requires 10 credits. Your 100 credits will refresh tomorrow at 00:00 UTC.");
+        setSearchState('result');
+        return;
+      }
+    }
+
+    // Automatically and immediately save AI Search query to Saved Content even before generating!
+    const queryToSave = searchQuery.trim();
+    if (onSaveSearch) {
+      onSaveSearch(queryToSave, "Searching and synthesizing comprehensive educational solutions...");
     }
 
     setSearchState('generating');
@@ -241,7 +268,7 @@ export function LandingPage({
       const response = await fetch('/api/search', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ query: searchQuery })
+        body: JSON.stringify({ query: queryToSave })
       });
       
       const data = await response.json();
@@ -251,6 +278,11 @@ export function LandingPage({
       
       setSearchResult(data.result);
       setSearchState('result');
+
+      // Update the saved content with the completed result
+      if (onSaveSearch) {
+        onSaveSearch(queryToSave, data.result);
+      }
     } catch (err: any) {
       console.error(err);
       setSearchResult(`Error: ${err.message || "Failed to generate search results."}`);
@@ -292,9 +324,16 @@ export function LandingPage({
       return;
     }
 
+    const effectivePrompt = prompt && prompt.trim() ? prompt.trim() : "Magic Lens Visual Question";
     setMagicLensState('processing');
-    setMagicPrompt(prompt);
-    setIsMagicSaved(false);
+    setMagicPrompt(effectivePrompt);
+    setIsMagicSaved(true);
+
+    // Automatically and immediately save Magic Lens question to Saved Content even before generating!
+    if (onSaveMagicLens) {
+      onSaveMagicLens("Analyzing visual document and generating step-by-step solution...", effectivePrompt);
+    }
+
     try {
       const token = await getIdToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -309,8 +348,12 @@ export function LandingPage({
       if (!response.ok) throw new Error(data.error || 'Failed to analyze image');
       setMagicResult(data.analysis);
       setMagicLensState('result');
-      setIsMagicSaved(false);
-      // NOTE: Do NOT auto-save here! The user can choose to Save to Content or Discard in the modal!
+      setIsMagicSaved(true);
+
+      // Update the saved content with the completed result
+      if (onSaveMagicLens) {
+        onSaveMagicLens(data.analysis, effectivePrompt);
+      }
     } catch (err: any) {
       console.error(err);
       setMagicResult(`Error: ${err.message || 'Failed to analyze image'}`);
@@ -852,220 +895,317 @@ export function LandingPage({
       <AnimatePresence>
         {isModalOpen && (
           <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md"
           >
             <motion.div 
-              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              className={`w-full max-w-lg rounded-3xl p-8 shadow-[0_0_40px_rgba(0,0,0,0.5)] border relative ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
+              initial={{ scale: 0.96, y: 15 }} 
+              animate={{ scale: 1, y: 0 }} 
+              exit={{ scale: 0.96, y: 15 }}
+              transition={{ type: "spring", damping: 26, stiffness: 290 }}
+              className={`w-full max-w-lg md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[88dvh] rounded-3xl shadow-2xl border relative z-10 overflow-hidden flex flex-col ${
+                isDarkMode 
+                  ? 'bg-slate-900 border-slate-700/80 text-white shadow-[0_0_60px_rgba(37,99,235,0.25)]' 
+                  : 'bg-white border-slate-200 text-slate-900 shadow-[0_25px_60px_rgba(0,0,0,0.18)]'
+              }`}
             >
-              <button onClick={() => setIsModalOpen(false)} className={`absolute top-6 right-6 opacity-50 hover:opacity-100 transition-opacity p-2 rounded-full ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-800'}`}>
-                <X className="w-5 h-5" />
-              </button>
-              
-              <h3 className={`text-2xl font-black mb-6 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Generate Classroom</h3>
-              
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:gap-5">
-                <div>
-                  <label className={`block text-sm font-bold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    What do you want to learn?
-                  </label>
-                  <input 
-                    type="text" 
-                    value={topic}
-                    onChange={e => setTopic(e.target.value)}
-                    placeholder={modalUploadedFile ? `Selected: ${modalUploadedFile.name} (Topic optional)` : "e.g. How black holes work"} 
-                    className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
-                    autoFocus
-                  />
+              {/* Modal Top Header Bar */}
+              <div className="flex items-center justify-between px-6 sm:px-8 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0">
+                    <Presentation className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight leading-tight">Generate Classroom</h3>
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      AI curriculum synthesis, chalkboard visuals, and audio narration
+                    </p>
+                  </div>
                 </div>
+                <button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className={`p-2 rounded-full transition-all ${
+                    isDarkMode 
+                      ? 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700' 
+                      : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {/* Responsive Horizontal Studio Form on Desktop, Smooth Scroll on Mobile */}
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-7 md:p-8">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 lg:gap-8 items-start">
+                  
+                  {/* LEFT COLUMN: Topic Input & Study Material (7 cols on desktop) */}
+                  <div className="md:col-span-7 flex flex-col gap-4">
+                    <div>
+                      <label className={`block text-xs font-bold uppercase tracking-wider mb-2 flex items-center justify-between ${
+                        isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>
+                        <span>What do you want to learn?</span>
+                        <span className="text-[10px] text-blue-500 lowercase font-medium">required if no file</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        value={topic}
+                        onChange={e => setTopic(e.target.value)}
+                        placeholder={modalUploadedFile ? `Selected: ${modalUploadedFile.name} (Topic optional)` : "e.g. How black holes work, Photosynthesis, Organic Chemistry..."} 
+                        className={`w-full border rounded-xl px-4 py-3.5 text-sm font-medium focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all ${
+                          isDarkMode 
+                            ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-500' 
+                            : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'
+                        }`}
+                        autoFocus
+                      />
+                      
+                      {/* Suggested Quick Topics */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                        <span className={`text-[10px] font-semibold ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Quick:</span>
+                        {['Photosynthesis', 'Quantum Physics', 'Plate Tectonics', 'Calculus'].map(sugg => (
+                          <button
+                            type="button"
+                            key={sugg}
+                            onClick={() => setTopic(sugg)}
+                            className={`text-[10px] px-2 py-0.5 rounded-lg border transition-all ${
+                              topic === sugg
+                                ? 'bg-blue-600 text-white border-blue-500'
+                                : (isDarkMode ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200')
+                            }`}
+                          >
+                            {sugg}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-                {/* PDF & Image Upload Input (Topic optional if uploaded) */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className={`block text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                      Or Upload Study Material (PDF or Image)
-                    </label>
-                    <span className="text-[11px] font-semibold text-cyan-400">
-                      Topic optional with upload
-                    </span>
+                    {/* PDF & Image Upload Input (Topic optional if uploaded) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className={`block text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                          Or Upload Study Material
+                        </label>
+                        <span className="text-[11px] font-semibold text-cyan-400">
+                          PDF or Image
+                        </span>
+                      </div>
+
+                      <input 
+                        type="file" 
+                        ref={pdfInputRef} 
+                        accept="application/pdf" 
+                        onChange={e => handleModalFileUpload(e, 'pdf')} 
+                        className="hidden" 
+                      />
+                      <input 
+                        type="file" 
+                        ref={imageInputRef} 
+                        accept="image/*" 
+                        onChange={e => handleModalFileUpload(e, 'image')} 
+                        className="hidden" 
+                      />
+
+                      {modalUploadedFile ? (
+                        <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
+                          isDarkMode ? 'bg-slate-950/80 border-cyan-500/40 text-white' : 'bg-cyan-50/70 border-cyan-300 text-slate-900'
+                        }`}>
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            {modalUploadedFile.previewUrl ? (
+                              <img 
+                                src={modalUploadedFile.previewUrl} 
+                                alt="Preview" 
+                                className="w-12 h-12 rounded-xl object-cover border border-cyan-400/50 shrink-0" 
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0">
+                                <FileText className="w-6 h-6" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold truncate">{modalUploadedFile.name}</p>
+                              <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                {(modalUploadedFile.size / 1024).toFixed(1)} KB • {modalUploadedFile.type.includes('pdf') ? 'PDF Document' : 'Image File'}
+                              </p>
+                              <p className="text-[10px] text-cyan-400 font-semibold mt-0.5">Ready for AI synthesis</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setModalUploadedFile(null)}
+                            className="p-2 rounded-full hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0"
+                            title="Remove file"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => pdfInputRef.current?.click()}
+                            className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-95 group ${
+                              isDarkMode 
+                                ? 'bg-slate-950/80 border-slate-800 hover:border-red-500/50 hover:bg-red-950/20 text-slate-300 hover:text-white' 
+                                : 'bg-slate-50 border-slate-200 hover:border-red-400 hover:bg-red-50 text-slate-700 hover:text-red-900'
+                            }`}
+                          >
+                            <FileText className="w-6 h-6 text-red-500 group-hover:scale-110 transition-transform" />
+                            <span>Upload PDF</span>
+                            <span className="text-[10px] font-normal opacity-60">Textbook / Notes</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => imageInputRef.current?.click()}
+                            className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-95 group ${
+                              isDarkMode 
+                                ? 'bg-slate-950/80 border-slate-800 hover:border-blue-500/50 hover:bg-blue-950/20 text-slate-300 hover:text-white' 
+                                : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-900'
+                            }`}
+                          >
+                            <ImageIcon className="w-6 h-6 text-blue-500 group-hover:scale-110 transition-transform" />
+                            <span>Upload Image</span>
+                            <span className="text-[10px] font-normal opacity-60">Chalkboard / Diagram</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <input 
-                    type="file" 
-                    ref={pdfInputRef} 
-                    accept="application/pdf" 
-                    onChange={e => handleModalFileUpload(e, 'pdf')} 
-                    className="hidden" 
-                  />
-                  <input 
-                    type="file" 
-                    ref={imageInputRef} 
-                    accept="image/*" 
-                    onChange={e => handleModalFileUpload(e, 'image')} 
-                    className="hidden" 
-                  />
-
-                  {modalUploadedFile ? (
-                    <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
-                      isDarkMode ? 'bg-slate-950/80 border-cyan-500/40 text-white' : 'bg-cyan-50/70 border-cyan-300 text-slate-900'
-                    }`}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        {modalUploadedFile.previewUrl ? (
-                          <img 
-                            src={modalUploadedFile.previewUrl} 
-                            alt="Preview" 
-                            className="w-10 h-10 rounded-xl object-cover border border-cyan-400/50 shrink-0" 
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0">
-                            <FileText className="w-5 h-5" />
+                  {/* RIGHT COLUMN: Settings, Persona, Focus & Submit (5 cols on desktop) */}
+                  <div className="md:col-span-5 flex flex-col gap-3.5">
+                    {/* Class & Language */}
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${
+                          isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                        }`}>
+                          <GraduationCap className="w-3.5 h-3.5 text-blue-500" /> Class Level
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={classLevel}
+                            onChange={e => setClassLevel(e.target.value)}
+                            className={`w-full border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${
+                              isDarkMode ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                            }`}
+                          >
+                            {[...Array(12)].map((_, i) => (
+                              <option key={i + 1} value={`Class ${i + 1}`}>Class {i + 1}</option>
+                            ))}
+                          </select>
+                          <div className="absolute inset-y-0 right-0 flex items-center px-3.5 pointer-events-none">
+                            <ChevronRight className="w-4 h-4 rotate-90 opacity-50" />
                           </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold truncate">{modalUploadedFile.name}</p>
-                          <p className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                            {(modalUploadedFile.size / 1024).toFixed(1)} KB • {modalUploadedFile.type.includes('pdf') ? 'PDF Document' : 'Image'}
-                          </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setModalUploadedFile(null)}
-                        className="p-1.5 rounded-full hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors shrink-0"
-                        title="Remove file"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => pdfInputRef.current?.click()}
-                        className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all active:scale-95 group ${
-                          isDarkMode 
-                            ? 'bg-slate-950 border-slate-800 hover:border-red-500/50 hover:bg-red-950/20 text-slate-300 hover:text-white' 
-                            : 'bg-slate-50 border-slate-200 hover:border-red-400 hover:bg-red-50 text-slate-700 hover:text-red-900'
-                        }`}
-                      >
-                        <FileText className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
-                        <span>Upload PDF</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => imageInputRef.current?.click()}
-                        className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all active:scale-95 group ${
-                          isDarkMode 
-                            ? 'bg-slate-950 border-slate-800 hover:border-blue-500/50 hover:bg-blue-950/20 text-slate-300 hover:text-white' 
-                            : 'bg-slate-50 border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-900'
-                        }`}
-                      >
-                        <ImageIcon className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
-                        <span>Upload Image</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-bold mb-2 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                      <GraduationCap className="w-4 h-4" /> Class
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={classLevel}
-                        onChange={e => setClassLevel(e.target.value)}
-                        className={`w-full border rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'}`}
-                      >
-                        {[...Array(12)].map((_, i) => (
-                          <option key={i + 1} value={`Class ${i + 1}`}>Class {i + 1}</option>
-                        ))}
-                      </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none">
-                        <ChevronRight className="w-4 h-4 rotate-90 opacity-50" />
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${
+                          isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                        }`}>
+                          <Globe className="w-3.5 h-3.5 text-cyan-500" /> Language
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={language}
+                            onChange={e => setLanguage(e.target.value)}
+                            className={`w-full border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${
+                              isDarkMode ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                            }`}
+                          >
+                            {['English', 'Telugu', 'Spanish', 'French', 'German', 'Hindi', 'Japanese', 'Mandarin'].map(lang => (
+                              <option key={lang} value={lang}>{lang}</option>
+                            ))}
+                          </select>
+                          <div className="absolute inset-y-0 right-0 flex items-center px-3.5 pointer-events-none">
+                            <ChevronRight className="w-4 h-4 rotate-90 opacity-50" />
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-bold mb-2 flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                      <Globe className="w-4 h-4" /> Language
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={language}
-                        onChange={e => setLanguage(e.target.value)}
-                        className={`w-full border rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'}`}
-                      >
-                        {['English', 'Telugu', 'Spanish', 'French', 'German', 'Hindi', 'Japanese', 'Mandarin'].map(lang => (
-                          <option key={lang} value={lang}>{lang}</option>
+
+                    {/* Teacher Persona */}
+                    <div>
+                      <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${
+                        isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>
+                        Teacher Persona
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {personas.map(p => (
+                          <button
+                            type="button"
+                            key={p}
+                            onClick={() => setPersona(p)}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-left flex items-center justify-between ${
+                              persona === p 
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/30' 
+                                : (isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-700' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100')
+                            }`}
+                          >
+                            <span>{p}</span>
+                            {persona === p && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
+                          </button>
                         ))}
-                      </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none">
-                        <ChevronRight className="w-4 h-4 rotate-90 opacity-50" />
                       </div>
                     </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className={`block text-sm font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teacher Persona</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {personas.map(p => (
-                      <button
-                        type="button"
-                        key={p}
-                        onClick={() => setPersona(p)}
-                        className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-all ${persona === p ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200')}`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                <div>
-                  <label className={`block text-sm font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Focus Areas</label>
-                  <div className="flex flex-wrap gap-2">
-                    {focusTags.map(tag => (
-                      <button
-                        type="button"
-                        key={tag}
-                        onClick={() => toggleFocus(tag)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${focusArea.includes(tag) ? 'bg-orange-500 text-white border-orange-400' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200')}`}
-                      >
-                        {tag}
-                      </button>
-                    ))}
+                    {/* Focus Areas */}
+                    <div>
+                      <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${
+                        isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>
+                        Focus Areas
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {focusTags.map(tag => (
+                          <button
+                            type="button"
+                            key={tag}
+                            onClick={() => toggleFocus(tag)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                              focusArea.includes(tag) 
+                                ? 'bg-orange-500 text-white border-orange-400 shadow-sm' 
+                                : (isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200')
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Google reCAPTCHA Protection Badge */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs border ${
+                      isDarkMode 
+                        ? 'bg-slate-950/80 border-slate-800 text-slate-400' 
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span className="text-[11px]">Protected by <strong className="font-semibold text-blue-500">Google reCAPTCHA</strong></span>
+                      </div>
+                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-500 shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Active
+                      </span>
+                    </div>
+
+                    {/* Submit Button */}
+                    <button 
+                      type="submit"
+                      disabled={!topic.trim() && !modalUploadedFile}
+                      className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-black py-3.5 rounded-xl flex items-center justify-center gap-2.5 transition-all shadow-lg shadow-blue-600/25 active:scale-[0.98] cursor-pointer"
+                    >
+                      <Presentation className="w-5 h-5" />
+                      <span>Generate Classroom {modalUploadedFile ? `from ${modalUploadedFile.type.includes('pdf') ? 'PDF' : 'Image'}` : ''}</span>
+                    </button>
                   </div>
                 </div>
-
-                {/* Google reCAPTCHA Protection Badge */}
-                <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs border ${
-                  isDarkMode 
-                    ? 'bg-slate-900 border-slate-800 text-slate-400' 
-                    : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span>Protected by <strong className="font-semibold text-blue-500">Google reCAPTCHA</strong></span>
-                  </div>
-                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-500 shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Active
-                  </span>
-                </div>
-
-                <button 
-                  type="submit"
-                  disabled={!topic.trim() && !modalUploadedFile}
-                  className="mt-4 w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98]"
-                >
-                  <Presentation className="w-5 h-5" />
-                  Generate Classroom {modalUploadedFile ? `from ${modalUploadedFile.type.includes('pdf') ? 'PDF' : 'Image'}` : ''}
-                </button>
               </form>
             </motion.div>
           </motion.div>
@@ -1115,9 +1255,16 @@ export function LandingPage({
                 <h2 className={`text-xl sm:text-2xl font-black flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                   AI Search
                 </h2>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                  10⚡ CREDITS
-                </span>
+                {freeSearchesRemaining > 0 ? (
+                  <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-emerald-400" />
+                    {freeSearchesRemaining} FREE TODAY
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    10⚡ CREDITS
+                  </span>
+                )}
               </div>
               <p className={`mb-4 sm:mb-5 text-xs sm:text-sm font-medium shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                 Instant comprehensive AI solutions, derivations, and step-by-step guidance.
@@ -1240,12 +1387,10 @@ export function LandingPage({
                     >
                       Copy Solution
                     </button>
-                    <button 
-                      onClick={handleSaveSearchResult} 
-                      className="px-5 sm:px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 active:scale-95"
-                    >
-                      <Sparkles className="w-4 h-4 text-yellow-300" /> Save to Saved Content
-                    </button>
+                    <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-2 rounded-xl">
+                      <Check className="w-4 h-4" />
+                      Saved to Saved Content
+                    </span>
                   </div>
                 </motion.div>
               )}

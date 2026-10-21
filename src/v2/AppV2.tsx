@@ -104,11 +104,17 @@ export default function AppV2() {
 
   const handleGenerate = async (config: any) => {
     const topicTitle = config.topic?.trim() || (config.uploadedFile ? config.uploadedFile.name.replace(/\.[^/.]+$/, "") : "Interactive Lesson");
+    const description = `Class: ${config.classLevel || 'N/A'} | Lang: ${config.language || 'N/A'} | Persona: ${config.persona || 'Friendly Mentor'}`;
     const newLesson = {
       id: Date.now().toString(),
       title: topicTitle,
-      description: `Class: ${config.classLevel || 'N/A'} | Lang: ${config.language || 'N/A'} | Persona: ${config.persona}`,
-      data: {},
+      description,
+      data: {
+        config: {
+          ...config,
+          topic: topicTitle
+        }
+      },
       config: {
         ...config,
         topic: topicTitle
@@ -117,6 +123,30 @@ export default function AppV2() {
     };
     setActiveLesson(newLesson);
     setViewState('generating');
+
+    // Automatically and immediately save lesson to Saved Content even before generating!
+    setSavedLessons(prev => {
+      const filtered = prev.filter(l => l.id !== newLesson.id && (l.title || '').trim().toLowerCase() !== topicTitle.trim().toLowerCase());
+      const updated = [newLesson, ...filtered];
+      try {
+        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (currentUser && saveItem) {
+      saveItem({
+        title: topicTitle,
+        description,
+        type: 'lesson',
+        data: {
+          timeline: [],
+          quiz: [],
+          config: newLesson.config
+        },
+        config: newLesson.config
+      }).catch(err => console.warn("Firestore auto-save on submit failed", err));
+    }
   };
 
   const handleLessonReady = (updatedLesson: any) => {
@@ -136,7 +166,7 @@ export default function AppV2() {
     };
     setActiveLesson(fullLesson);
 
-    // Automatically save lesson to local cache
+    // Automatically update saved lesson in local cache with generated timeline and quiz
     setSavedLessons(prev => {
       const filtered = prev.filter(l => l.id !== fullLesson.id && (l.title || '').trim().toLowerCase() !== topic.trim().toLowerCase());
       const updated = [fullLesson, ...filtered];
@@ -146,7 +176,7 @@ export default function AppV2() {
       return updated;
     });
 
-    // Automatically save lesson to cloud user account if logged in
+    // Automatically save/update lesson in cloud user account if logged in
     if (currentUser && saveItem) {
       saveItem({
         title: topic,
@@ -163,7 +193,7 @@ export default function AppV2() {
   };
 
   const handleSaveMagicLens = (result: string, promptText?: string) => {
-    const title = promptText && promptText.trim() ? promptText.trim() : "Magic Lens Capture";
+    const title = promptText && promptText.trim() ? promptText.trim() : "Magic Lens Visual Question";
     const newLensItem = {
       id: Date.now().toString(),
       title,
@@ -177,8 +207,15 @@ export default function AppV2() {
       messages: []
     };
 
-    // Save to local cache
-    setSavedLessons(prev => [newLensItem, ...prev]);
+    // Save/update to local cache immediately (deduplicating by title)
+    setSavedLessons(prev => {
+      const filtered = prev.filter(item => !(item.isMagicLens && (item.title || '').trim().toLowerCase() === title.trim().toLowerCase()));
+      const updated = [newLensItem, ...filtered];
+      try {
+        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     // Save to Firestore if user logged in
     if (currentUser && saveItem) {
@@ -196,31 +233,39 @@ export default function AppV2() {
   };
 
   const handleSaveSearch = (query: string, result: string) => {
+    const title = query.trim() || "AI Search";
     const newSearchItem = {
       id: Date.now().toString(),
-      title: query,
+      title,
       description: "AI Generated Solution",
       isAISearch: true,
       data: { result },
       config: {
-        topic: query,
+        topic: title,
         persona: "AI Search"
       },
       messages: []
     };
 
-    // Save to local cache
-    setSavedLessons(prev => [newSearchItem, ...prev]);
+    // Save/update to local cache immediately (deduplicating by title)
+    setSavedLessons(prev => {
+      const filtered = prev.filter(item => !(item.isAISearch && (item.title || '').trim().toLowerCase() === title.trim().toLowerCase()));
+      const updated = [newSearchItem, ...filtered];
+      try {
+        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     // Save to Firestore if user logged in
     if (currentUser && saveItem) {
       saveItem({
-        title: query,
+        title,
         description: "AI Generated Solution",
         type: 'ai_search',
         data: { result },
         config: {
-          topic: query,
+          topic: title,
           persona: "AI Search"
         }
       }).catch(err => console.warn("Firestore save failed", err));

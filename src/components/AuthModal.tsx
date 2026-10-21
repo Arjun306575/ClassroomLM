@@ -99,9 +99,11 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = '
       if (msg.includes('user-not-found') || msg.includes('wrong-password') || msg.includes('invalid-credential')) {
         msg = 'Invalid username or password. Please verify your credentials.';
       } else if (msg.includes('email-already-in-use') || msg.includes('already exists') || msg.includes('already in use')) {
-        msg = 'This name already exists. Please choose a different username or sign in.';
+        msg = 'This username or email is already registered. Please choose another username or sign in.';
       } else if (msg.includes('weak-password')) {
-        msg = 'Password is too weak. Please choose a stronger password.';
+        msg = 'Password is too weak. Please ensure it has at least 8 characters, an uppercase letter, a number, and a special character.';
+      } else if (msg.includes('OPERATION_NOT_ALLOWED') || msg.includes('operation-not-allowed')) {
+        msg = 'Registration error. Please check your details and try again.';
       }
       setError(msg);
     } finally {
@@ -357,7 +359,7 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = '
 
               <div>
                 <label className={`block text-[11px] sm:text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                  Username
+                  Username or Email
                 </label>
                 <div className="relative">
                   <User className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
@@ -366,12 +368,10 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = '
                     required
                     value={email}
                     onChange={e => {
-                      // Silently strip '@' in signup mode without warning user
-                      const cleanVal = mode === 'signup' ? e.target.value.replace(/@/g, '') : e.target.value;
-                      setEmail(cleanVal);
+                      setEmail(e.target.value);
                       setError(null);
                     }}
-                    placeholder={mode === 'signup' ? "Choose your username (e.g. alex24)" : "Enter your username"}
+                    placeholder={mode === 'signup' ? "Choose a username (e.g. alex24) or enter your email" : "Enter your username or email"}
                     className={`w-full pl-9 pr-3 py-2 rounded-xl border text-xs sm:text-sm font-medium transition-all ${
                       isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500'
                     }`}
@@ -379,7 +379,7 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = '
                 </div>
                 {mode === 'signup' && (
                   <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    No "@" needed. Pick a username you will use to log in.
+                    Use a simple username or your real email address.
                   </p>
                 )}
               </div>

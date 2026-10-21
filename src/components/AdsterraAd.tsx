@@ -226,7 +226,7 @@ export function AdsterraAd({ className = '' }: AdsterraAdProps) {
       }}
       data-testid="adsterra-ad-container"
     >
-      <div className="flex items-center gap-1 mb-1 text-[10px] sm:text-[11px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500 select-none">
+      <div className="flex items-center gap-1 mb-1 text-[10px] sm:text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-200 select-none drop-shadow-sm">
         <span>Sponsored</span>
       </div>
       <div 

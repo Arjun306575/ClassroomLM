@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   Send, X, Loader2, Hand, Mic, Globe, Lock,
   Library, Maximize2, Minimize2, ChevronLeft, ChevronRight, Volume2,
-  Sparkles, Award, BookOpen, ArrowRight, RotateCcw, CheckCircle2, RefreshCw
+  Sparkles, Award, BookOpen, ArrowRight, RotateCcw, CheckCircle2, RefreshCw, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
@@ -13,6 +13,8 @@ import 'katex/dist/katex.min.css';
 import { PreClassroom } from './PreClassroom';
 import { InteractiveQuiz2D } from './InteractiveQuiz2D';
 import { TeacherMascot2D } from './TeacherMascot2D';
+import { FuturisticTeacher3D } from './FuturisticTeacher3D';
+import { AiQuizGame } from './AiQuizGame';
 import { useAuth } from '../firebase/authContext';
 import { QuizQuestion } from '../types';
 
@@ -397,6 +399,7 @@ export function LiveClassroom({
 
   // Interactive Lesson Quiz States (3-5 Questions related to lesson explained)
   const [isQuizActive, setIsQuizActive] = useState(false);
+  const [isMiniGameActive, setIsMiniGameActive] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [isQuizLoading, setIsQuizLoading] = useState(false);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -576,28 +579,39 @@ export function LiveClassroom({
       const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
       if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
 
-      // Clean Audio PCM Smoothing: eliminate clicks, pops, and end-of-speech noise
+      // Clean Audio PCM Smoothing: eliminate clicks, pops, DC offset, and trailing static noise
       for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
         const channelData = audioBuffer.getChannelData(ch);
         const totalSamples = channelData.length;
 
-        // 1. Smooth 10ms fade-in
-        const fadeInSamples = Math.min(Math.floor(audioBuffer.sampleRate * 0.01), Math.floor(totalSamples * 0.05));
+        // 1. Smooth 15ms fade-in to prevent startup pop
+        const fadeInSamples = Math.min(Math.floor(audioBuffer.sampleRate * 0.015), Math.floor(totalSamples * 0.05));
         for (let i = 0; i < fadeInSamples; i++) {
           channelData[i] *= (i / fadeInSamples);
         }
 
-        // 2. Smooth 80ms cosine taper fade-out at the tail of the buffer
-        const fadeOutSamples = Math.min(Math.floor(audioBuffer.sampleRate * 0.08), Math.floor(totalSamples * 0.2));
-        for (let i = 0; i < fadeOutSamples; i++) {
-          const idx = totalSamples - fadeOutSamples + i;
-          const factor = 0.5 * (1 + Math.cos((Math.PI * i) / fadeOutSamples));
-          channelData[idx] *= factor;
+        // 2. Scan backwards to locate the true end of audible speech (eliminating trailing digital static / DC offset)
+        let lastAudibleIdx = totalSamples - 1;
+        for (let i = totalSamples - 1; i >= 0; i--) {
+          if (Math.abs(channelData[i]) > 0.005) {
+            lastAudibleIdx = i;
+            break;
+          }
         }
 
-        // 3. Guarantee last 256 samples are strictly zero
-        const zeroSamples = Math.min(256, totalSamples);
-        for (let i = totalSamples - zeroSamples; i < totalSamples; i++) {
+        // Allow 60ms natural decay, then taper smoothly to zero
+        const decayEndIdx = Math.min(totalSamples, lastAudibleIdx + Math.floor(audioBuffer.sampleRate * 0.06));
+        const fadeDuration = Math.min(Math.floor(audioBuffer.sampleRate * 0.12), decayEndIdx);
+        const fadeStartIdx = Math.max(0, decayEndIdx - fadeDuration);
+
+        for (let i = fadeStartIdx; i < decayEndIdx; i++) {
+          const progress = (i - fadeStartIdx) / (decayEndIdx - fadeStartIdx);
+          const factor = 0.5 * (1 + Math.cos(Math.PI * progress));
+          channelData[i] *= factor;
+        }
+
+        // 3. Strictly zero all trailing samples to guarantee absolute 0V digital silence
+        for (let i = decayEndIdx; i < totalSamples; i++) {
           channelData[i] = 0;
         }
       }
@@ -629,31 +643,35 @@ export function LiveClassroom({
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
 
-      // Anti-cracking GainNode envelope: smooth gentle fade-out at end of audio buffer
+      // Anti-cracking GainNode envelope: smooth gentle fade-out well before end of audio buffer
       const gainNode = ctx.createGain();
       const startTime = ctx.currentTime;
       gainNode.gain.setValueAtTime(1, startTime);
-      const fadeOutTime = Math.max(0, audioBuffer.duration - 0.1);
-      gainNode.gain.setValueAtTime(1, startTime + fadeOutTime);
-      gainNode.gain.linearRampToValueAtTime(0, startTime + audioBuffer.duration);
+      const fadeOutStart = Math.max(0, audioBuffer.duration - 0.22);
+      gainNode.gain.setValueAtTime(1, startTime + fadeOutStart);
+      gainNode.gain.linearRampToValueAtTime(0, startTime + Math.max(fadeOutStart + 0.01, audioBuffer.duration - 0.04));
+      gainNode.gain.setValueAtTime(0, startTime + audioBuffer.duration);
 
       source.connect(gainNode);
       gainNode.connect(ctx.destination);
       if (analyserRef.current) {
-        source.connect(analyserRef.current);
+        gainNode.connect(analyserRef.current);
       }
       currentGainNodeRef.current = gainNode;
 
       source.onended = () => {
-        try {
-          source.disconnect();
-          gainNode.disconnect();
-        } catch (e) {}
         if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
           setMascotPose('neutral');
           setIsSpeaking(false);
           setIsSlideNarrationComplete(true);
         }
+        // Delayed, non-blocking cleanup so Web Audio render pipeline completes with zero transients
+        setTimeout(() => {
+          try {
+            source.disconnect();
+            gainNode.disconnect();
+          } catch (e) {}
+        }, 250);
       };
 
       currentAudioSourceRef.current = source;
@@ -815,6 +833,11 @@ export function LiveClassroom({
     const spoken = step.spokenDialogue || step.bubbleCaption || "";
     if (spoken && isMountedRef.current && playbackSessionIdRef.current === sessionId) {
       await playAudioWithEmotion(spoken, rawBullets, step.ttsAudio);
+    } else if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
+      setIsSpeaking(false);
+      setIsSlideNarrationComplete(true);
+      setActiveBulletIndex(-1);
+      setRevealedBulletCount(rawBullets.length);
     }
   }, [playAudioWithEmotion, lessonData]);
 
@@ -1102,7 +1125,21 @@ export function LiveClassroom({
   };
 
   const handlePrevStep = () => {
-    if (currentStepIndex > 0 && !isSpeaking) {
+    if (currentStepIndex > 0) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (currentAudioSourceRef.current) {
+        try {
+          currentAudioSourceRef.current.onended = null;
+          currentAudioSourceRef.current.stop();
+        } catch (e) {}
+        currentAudioSourceRef.current = null;
+      }
+      clearCaptionTimers();
+      setIsSpeaking(false);
+      setIsSlideNarrationComplete(false);
+
       const newIdx = currentStepIndex - 1;
       setCurrentStepIndex(newIdx);
       if (timeline[newIdx]) {
@@ -1112,7 +1149,21 @@ export function LiveClassroom({
   };
 
   const handleNextStep = () => {
-    if (currentStepIndex < timeline.length - 1 && !isSpeaking) {
+    if (currentStepIndex < timeline.length - 1) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (currentAudioSourceRef.current) {
+        try {
+          currentAudioSourceRef.current.onended = null;
+          currentAudioSourceRef.current.stop();
+        } catch (e) {}
+        currentAudioSourceRef.current = null;
+      }
+      clearCaptionTimers();
+      setIsSpeaking(false);
+      setIsSlideNarrationComplete(false);
+
       const newIdx = currentStepIndex + 1;
       setCurrentStepIndex(newIdx);
       if (timeline[newIdx]) {
@@ -1402,13 +1453,16 @@ export function LiveClassroom({
               </div>
             </div>
 
-            {/* Mascot Teacher Character (Left Column) */}
-            <aside className="relative z-10 w-36 sm:w-44 md:w-56 lg:w-64 shrink-0 h-full flex flex-col items-center justify-end pb-2 select-none">
-              <Mascot2D pose={mascotPose} isSpeaking={isSpeaking} analyserRef={analyserRef} />
-              <div className="mt-1 text-center">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest bg-slate-800/80 px-2.5 py-0.5 rounded-full border border-slate-700">
-                  AI Teacher
-                </span>
+            {/* Futuristic Advanced 3D AI Teacher Character (Left Column) */}
+            <aside className="relative z-10 w-44 sm:w-52 md:w-60 lg:w-72 shrink-0 h-full flex flex-col items-center justify-end pb-3 select-none">
+              <FuturisticTeacher3D pose={mascotPose} isSpeaking={isSpeaking} analyserRef={analyserRef} />
+              <div className="mt-1 text-center flex flex-col items-center gap-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.25)] text-cyan-300">
+                  <span className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-cyan-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`} />
+                  <span className="text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
+                    {isSpeaking ? 'Explaining Lesson' : 'Quantum AI Teacher'}
+                  </span>
+                </div>
               </div>
             </aside>
 
@@ -1436,6 +1490,7 @@ export function LiveClassroom({
                     onRetakeQuiz={handleRetakeQuiz}
                     onGenerateFreshQuiz={handleGenerateFreshQuiz}
                     onReturnToSlides={() => setIsQuizActive(false)}
+                    onLaunchMiniGame={() => setIsMiniGameActive(true)}
                   />
                 ) : (
                   <Blackboard2D 
@@ -1638,32 +1693,59 @@ export function LiveClassroom({
                 </motion.button>
               )}
 
-              {/* End of Lesson: Prominent CTA to Take Quiz (shown only when all slides complete and narration finished) */}
+              {/* End of Lesson: Prominent CTAs for Beat the Bot Mini-Game and Lesson Quiz */}
               {!isQuizActive && currentStepIndex >= timeline.length - 1 && !isSpeaking && (
-                <motion.button
-                  type="button"
-                  onClick={() => {
-                    setIsQuizActive(true);
-                    if (quizQuestions.length === 0 && !isQuizLoading) {
-                      fetchFreshQuiz();
-                    }
-                  }}
-                  animate={{ 
-                    scale: [1, 1.05, 1],
-                    boxShadow: [
-                      "0 0 10px rgba(34,211,238,0.5)",
-                      "0 0 26px rgba(34,211,238,0.9)",
-                      "0 0 10px rgba(34,211,238,0.5)"
-                    ]
-                  }}
-                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                  className="flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-cyan-200 cursor-pointer"
-                  title="Lesson complete! Take 3-5 assessment questions related to this lesson"
-                >
-                  <Award className="w-4 h-4 fill-current text-indigo-950" />
-                  <span className="tracking-wide">Take Lesson Quiz ({quizQuestions.length > 0 ? quizQuestions.length : '3–5'} Qs)</span>
-                  <ChevronRight className="w-4 h-4 stroke-[3]" />
-                </motion.button>
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    type="button"
+                    onClick={() => {
+                      if (quizQuestions.length === 0 && !isQuizLoading) {
+                        fetchFreshQuiz();
+                      }
+                      setIsMiniGameActive(true);
+                    }}
+                    animate={{ 
+                      scale: [1, 1.04, 1],
+                      boxShadow: [
+                        "0 0 10px rgba(245,158,11,0.5)",
+                        "0 0 24px rgba(236,72,153,0.8)",
+                        "0 0 10px rgba(245,158,11,0.5)"
+                      ]
+                    }}
+                    transition={{ repeat: Infinity, duration: 1.3, ease: "easeInOut" }}
+                    className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-amber-400 via-pink-500 to-indigo-500 hover:from-amber-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-amber-300 cursor-pointer"
+                    title="Play 60s Beat the Bot rapid-fire trivia to unlock 2 free AI Searches!"
+                  >
+                    <Zap className="w-4 h-4 fill-current text-slate-950" />
+                    <span className="tracking-wide">Beat the Bot (60s)</span>
+                    <Sparkles className="w-3.5 h-3.5 fill-current text-slate-950" />
+                  </motion.button>
+
+                  <motion.button
+                    type="button"
+                    onClick={() => {
+                      setIsQuizActive(true);
+                      if (quizQuestions.length === 0 && !isQuizLoading) {
+                        fetchFreshQuiz();
+                      }
+                    }}
+                    animate={{ 
+                      scale: [1, 1.05, 1],
+                      boxShadow: [
+                        "0 0 10px rgba(34,211,238,0.5)",
+                        "0 0 26px rgba(34,211,238,0.9)",
+                        "0 0 10px rgba(34,211,238,0.5)"
+                      ]
+                    }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                    className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-cyan-200 cursor-pointer"
+                    title="Lesson complete! Take 3-5 assessment questions related to this lesson"
+                  >
+                    <Award className="w-4 h-4 fill-current text-indigo-950" />
+                    <span className="tracking-wide">Lesson Quiz ({quizQuestions.length > 0 ? quizQuestions.length : '3–5'} Qs)</span>
+                    <ChevronRight className="w-4 h-4 stroke-[3]" />
+                  </motion.button>
+                </div>
               )}
 
               {/* While in Quiz view: Button to Return to Slides */}
@@ -1725,6 +1807,78 @@ export function LiveClassroom({
           </footer>
 
         </div>
+      )}
+
+      {/* 60s Rapid-Fire AI Quiz Show: Beat the Bot! Mini-Game Modal */}
+      {isMiniGameActive && (
+        <AiQuizGame
+          questions={
+            quizQuestions.length > 0 
+              ? quizQuestions 
+              : (Array.isArray(lessonData?.data?.quiz) && lessonData.data.quiz.length > 0)
+              ? lessonData.data.quiz
+              : [
+                  {
+                    question: `What is the core principle of ${lessonData?.title || boardHeading || "this lesson"}?`,
+                    options: [
+                      "Fundamental scientific mechanisms and definitions",
+                      "Unrelated arbitrary observations",
+                      "Non-functional static description",
+                      "Alternative unverified speculation"
+                    ],
+                    correctIndex: 0,
+                    explanation: `Core principles govern the mechanisms of ${lessonData?.title || boardHeading || "this topic"}.`
+                  },
+                  {
+                    question: `Why is understanding ${lessonData?.title || boardHeading || "this topic"} essential?`,
+                    options: [
+                      "It has no practical relevance",
+                      "It enables systematic analysis and problem-solving",
+                      "It only works in theoretical models",
+                      "It is obsolete"
+                    ],
+                    correctIndex: 1,
+                    explanation: "Mastering this concept enables predictive modeling and systematic analysis."
+                  },
+                  {
+                    question: "Which approach is most effective when analyzing problems in this lesson?",
+                    options: [
+                      "Random guessing without checking principles",
+                      "Breaking complex systems into first principles",
+                      "Ignoring system boundary conditions",
+                      "Relying solely on intuition"
+                    ],
+                    correctIndex: 1,
+                    explanation: "First-principles component breakdown is the gold standard for analytical reasoning."
+                  },
+                  {
+                    question: "What primary factor drives key transformations across this system?",
+                    options: [
+                      "Energy interactions and governing mechanisms",
+                      "Arbitrary background noise",
+                      "Uncalibrated fluctuations",
+                      "Total absence of external variables"
+                    ],
+                    correctIndex: 0,
+                    explanation: "Energy gradients and interaction dynamics drive transformations across the system."
+                  },
+                  {
+                    question: "What is the key takeaway students should master?",
+                    options: [
+                      "Deep comprehension of underlying mechanisms and applications",
+                      "Rote memorization without understanding",
+                      "Skipping validation steps",
+                      "Disregarding foundational laws"
+                    ],
+                    correctIndex: 0,
+                    explanation: "Deep conceptual comprehension and understanding boundary constraints ensure mastery."
+                  }
+                ]
+          }
+          topic={lessonData?.title || boardHeading || "Lesson Review"}
+          onClose={() => setIsMiniGameActive(false)}
+          isDarkMode={isDarkMode}
+        />
       )}
     </div>
   );

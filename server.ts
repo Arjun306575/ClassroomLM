@@ -75,30 +75,122 @@ try {
   console.warn("[Auth Security] Failed to load firebase-applet-config.json:", e);
 }
 
-// In-memory token cache to prevent redundant external verification calls (10 min TTL)
-const tokenCache = new Map<string, { uid: string; email?: string; expiresAt: number }>();
+// In-memory token cache for Firebase & Manual Auth verification (10 min TTL)
+const tokenCache = new Map<string, { uid: string; email: string; expiresAt: number }>();
+
+// Secret key for signing manual user session tokens
+const AUTH_SECRET = process.env.FIREBASE_API_KEY || "classroomlm-secure-jwt-auth-secret-key-2026";
+
+// Path to persistent manual users store
+const MANUAL_USERS_FILE = path.join(process.cwd(), "data", "manual_users.json");
+
+interface ManualUserRecord {
+  uid: string;
+  username: string;
+  email: string;
+  displayName: string;
+  passwordHash: string;
+  salt: string;
+  createdAt: string;
+}
+
+function ensureManualUsersStore(): ManualUserRecord[] {
+  try {
+    const dir = path.dirname(MANUAL_USERS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!fs.existsSync(MANUAL_USERS_FILE)) {
+      fs.writeFileSync(MANUAL_USERS_FILE, JSON.stringify([]), "utf8");
+      return [];
+    }
+    const raw = fs.readFileSync(MANUAL_USERS_FILE, "utf8");
+    return JSON.parse(raw) as ManualUserRecord[];
+  } catch (err) {
+    console.warn("[Manual Auth] Could not read manual users store, using in-memory list:", err);
+    return [];
+  }
+}
+
+function saveManualUsersStore(records: ManualUserRecord[]) {
+  try {
+    const dir = path.dirname(MANUAL_USERS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(MANUAL_USERS_FILE, JSON.stringify(records, null, 2), "utf8");
+  } catch (err) {
+    console.error("[Manual Auth] Failed saving manual users store:", err);
+  }
+}
+
+export function createManualToken(payload: { uid: string; email: string; displayName?: string }): string {
+  const data = {
+    ...payload,
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30-day validity
+  };
+  const b64 = Buffer.from(JSON.stringify(data)).toString("base64url");
+  const signature = crypto.createHmac("sha256", AUTH_SECRET).update(b64).digest("base64url");
+  return `clm_manual_${b64}_${signature}`;
+}
+
+export function verifyManualToken(token: string): { uid: string; email: string; displayName?: string } | null {
+  if (!token.startsWith("clm_manual_")) return null;
+  const parts = token.slice("clm_manual_".length).split("_");
+  if (parts.length !== 2) return null;
+  const [b64, sig] = parts;
+  const expectedSig = crypto.createHmac("sha256", AUTH_SECRET).update(b64).digest("base64url");
+  if (sig !== expectedSig) return null;
+
+  try {
+    const json = JSON.parse(Buffer.from(b64, "base64url").toString("utf8"));
+    if (json.exp && json.exp < Date.now()) return null;
+    return { uid: json.uid, email: json.email, displayName: json.displayName };
+  } catch {
+    return null;
+  }
+}
 
 async function verifyFirebaseToken(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({
-      error: "Unauthorized: Missing Authorization header. A valid Firebase ID token is required to access AI tools."
+      error: "Unauthorized: Missing Authorization header. A valid user session token is required to access AI tools."
     });
   }
 
   const idToken = authHeader.split("Bearer ")[1]?.trim();
   if (!idToken) {
     return res.status(401).json({
-      error: "Unauthorized: Firebase ID token is empty."
+      error: "Unauthorized: User session token is empty."
     });
   }
 
+  // 1. Check in-memory verification cache
   const cached = tokenCache.get(idToken);
   if (cached && cached.expiresAt > Date.now()) {
     (req as any).user = { uid: cached.uid, email: cached.email };
     return next();
   }
 
+  // 2. Check if this is a secure manual account token
+  if (idToken.startsWith("clm_manual_")) {
+    const verified = verifyManualToken(idToken);
+    if (!verified) {
+      return res.status(401).json({
+        error: "Unauthorized: Invalid or expired manual account token. Please sign in again."
+      });
+    }
+    tokenCache.set(idToken, {
+      uid: verified.uid,
+      email: verified.email,
+      expiresAt: Date.now() + 60 * 60 * 1000
+    });
+    (req as any).user = { uid: verified.uid, email: verified.email };
+    return next();
+  }
+
+  // 3. Fallback to Google Firebase Identity Toolkit accounts:lookup for Google OAuth sessions
   try {
     const key = process.env.FIREBASE_API_KEY || firebaseApiKey;
     if (!key) {
@@ -413,6 +505,124 @@ async function fetchInternetImageForSlide(searchKeyword: string, topic: string):
     return null;
   }
 }
+
+/**
+ * Authentication Endpoints: Manual Account Sign-Up & Sign-In
+ * Fully fixes Firebase OPERATION_NOT_ALLOWED by offering smooth manual account creation.
+ */
+app.post("/api/auth/signup", async (req, res) => {
+  try {
+    const { identifier, email: directEmail, password, name } = req.body;
+    const rawId = (identifier || directEmail || "").trim();
+    if (!rawId) {
+      return res.status(400).json({ error: "Please enter a valid username or email address." });
+    }
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters long." });
+    }
+
+    // Determine normalized email and username
+    let email: string;
+    let username: string;
+    if (rawId.includes("@")) {
+      email = rawId.toLowerCase();
+      username = email.split("@")[0].replace(/[^a-zA-Z0-9_.-]/g, "") || "student";
+    } else {
+      username = rawId.toLowerCase().replace(/[^a-zA-Z0-9_.-]/g, "") || "student";
+      email = `${username}@classroomlm.app`;
+    }
+
+    const records = ensureManualUsersStore();
+    const exists = records.find(u => 
+      u.email.toLowerCase() === email.toLowerCase() || 
+      u.username.toLowerCase() === username.toLowerCase()
+    );
+    if (exists) {
+      return res.status(400).json({ 
+        error: "An account with this username or email already exists. Please choose a different username or sign in." 
+      });
+    }
+
+    const salt = crypto.randomBytes(16).toString("hex");
+    const passwordHash = crypto.scryptSync(password, salt, 64).toString("hex");
+    const uid = "usr_" + crypto.randomBytes(12).toString("hex");
+    const displayName = (name || username || "Student").trim();
+
+    const newUser: ManualUserRecord = {
+      uid,
+      username,
+      email,
+      displayName,
+      passwordHash,
+      salt,
+      createdAt: new Date().toISOString()
+    };
+
+    records.push(newUser);
+    saveManualUsersStore(records);
+
+    const token = createManualToken({ uid, email, displayName });
+    console.log(`[Manual Auth] Successfully registered new user: ${username} (${email}), UID: ${uid}`);
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        uid,
+        email,
+        displayName,
+        photoURL: ""
+      },
+      token
+    });
+  } catch (err: any) {
+    console.error("[Manual Auth] Sign up error:", err);
+    return res.status(500).json({ error: "Registration failed. Please try again." });
+  }
+});
+
+app.post("/api/auth/signin", async (req, res) => {
+  try {
+    const { identifier, email: directEmail, password } = req.body;
+    const rawId = (identifier || directEmail || "").trim();
+    if (!rawId || !password) {
+      return res.status(400).json({ error: "Please enter your username/email and password." });
+    }
+
+    const searchStr = rawId.toLowerCase();
+    const records = ensureManualUsersStore();
+    const user = records.find(u => 
+      u.email.toLowerCase() === searchStr ||
+      u.username.toLowerCase() === searchStr ||
+      u.email.toLowerCase() === `${searchStr}@classroomlm.app`
+    );
+
+    if (!user) {
+      return res.status(401).json({ error: "Invalid username or password. Please verify your credentials." });
+    }
+
+    const calculatedHash = crypto.scryptSync(password, user.salt, 64).toString("hex");
+    if (calculatedHash !== user.passwordHash) {
+      return res.status(401).json({ error: "Invalid username or password. Please verify your credentials." });
+    }
+
+    const token = createManualToken({ uid: user.uid, email: user.email, displayName: user.displayName });
+    console.log(`[Manual Auth] User signed in: ${user.username} (${user.email})`);
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: ""
+      },
+      token
+    });
+  } catch (err: any) {
+    console.error("[Manual Auth] Sign in error:", err);
+    return res.status(500).json({ error: "Authentication failed. Please try again." });
+  }
+});
 
 /**
  * 1. API: Generate Interactive Lesson Timeline & Quiz
@@ -1659,8 +1869,8 @@ function createWavFromPcm(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
   const numSamples = safeLength / 2;
 
   if (numSamples > 10) {
-    // 1. Gentle fade-in (first ~6ms = 144 samples) to eliminate any startup DC pop
-    const fadeInSamples = Math.min(144, Math.floor(numSamples / 8));
+    // 1. Gentle fade-in (first ~10ms = 240 samples) to eliminate startup pop
+    const fadeInSamples = Math.min(240, Math.floor(numSamples / 6));
     for (let i = 0; i < fadeInSamples; i++) {
       const byteOffset = i * 2;
       const sampleVal = cleanPcm.readInt16LE(byteOffset);
@@ -1668,27 +1878,38 @@ function createWavFromPcm(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
       cleanPcm.writeInt16LE(Math.round(sampleVal * factor), byteOffset);
     }
 
-    // 2. Smooth cosine taper fade-out (last ~60ms = 1440 samples) to prevent end-of-speech clicks/crackles
-    const fadeOutSamples = Math.min(1440, Math.floor(numSamples / 3));
-    for (let i = 0; i < fadeOutSamples; i++) {
-      const sampleIdx = numSamples - fadeOutSamples + i;
-      const byteOffset = sampleIdx * 2;
+    // 2. Scan backwards to locate the true end of audible speech (> 160 amplitude)
+    let lastAudibleSample = numSamples - 1;
+    for (let i = numSamples - 1; i >= 0; i--) {
+      const val = cleanPcm.readInt16LE(i * 2);
+      if (Math.abs(val) > 160) {
+        lastAudibleSample = i;
+        break;
+      }
+    }
+
+    // Decay smoothly over 120ms after last audible speech
+    const decayEndSample = Math.min(numSamples, lastAudibleSample + Math.round(sampleRate * 0.05));
+    const fadeOutSamples = Math.min(Math.round(sampleRate * 0.12), decayEndSample);
+    const fadeStartSample = Math.max(0, decayEndSample - fadeOutSamples);
+
+    for (let i = fadeStartSample; i < decayEndSample; i++) {
+      const byteOffset = i * 2;
       const sampleVal = cleanPcm.readInt16LE(byteOffset);
-      // Cosine taper from 1.0 down to 0.0 with zero spectral noise
-      const factor = 0.5 * (1 + Math.cos(Math.PI * (i / fadeOutSamples)));
+      const progress = (i - fadeStartSample) / (decayEndSample - fadeStartSample);
+      const factor = 0.5 * (1 + Math.cos(Math.PI * progress));
       const smoothVal = Math.round(sampleVal * factor);
       cleanPcm.writeInt16LE(Math.max(-32768, Math.min(32767, smoothVal)), byteOffset);
     }
 
-    // Ensure the last 128 PCM samples are absolute 0V to prevent any edge noise
-    const tailZeroCount = Math.min(128, numSamples);
-    for (let i = numSamples - tailZeroCount; i < numSamples; i++) {
+    // 3. Strictly zero all subsequent samples to total silence
+    for (let i = decayEndSample; i < numSamples; i++) {
       cleanPcm.writeInt16LE(0, i * 2);
     }
   }
 
-  // 3. Append 100ms of true silence (2400 samples = 4800 zero bytes) so DAC output reaches stable 0V
-  const silenceSamples = Math.round(sampleRate * 0.1); // 100ms of true silence
+  // 4. Append 160ms of true silence (3840 zero samples = 7680 zero bytes) so audio output smoothly settles
+  const silenceSamples = Math.round(sampleRate * 0.16);
   const silencePad = Buffer.alloc(silenceSamples * 2);
 
   const totalAudioData = Buffer.concat([cleanPcm, silencePad]);

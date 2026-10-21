@@ -1,0 +1,29 @@
+[
+  {
+    "uid": "usr_099d5a90ef9f32cef52f9d43",
+    "username": "testuser123",
+    "email": "testuser123@classroomlm.app",
+    "displayName": "Test User",
+    "passwordHash": "661ab1abefa70baa8f4c120124f215de0edb7f430f4ed158072c21e9b8b15bb9a873ce88677ee19d1dd12d73731972ad23e9819ce064be002fb667f1f690f07f",
+    "salt": "e0fe070212ca6b712c666d697ce80ca6",
+    "createdAt": "2026-10-21T07:57:22.828Z"
+  },
+  {
+    "uid": "usr_92ea591044f97bd2473414d7",
+    "username": "myemail",
+    "email": "myemail@gmail.com",
+    "displayName": "My Name",
+    "passwordHash": "7d5c4b831062b53a34d66985ab0ef20723b29a4d16501f96dcd48ac54faa834603207d15f2021795829fe01cb82b849ef9f997e60b835c1205531c70cc6c2b3a",
+    "salt": "3b63b7e6684b9762ef41bbfc6d39b259",
+    "createdAt": "2026-10-21T07:57:27.626Z"
+  },
+  {
+    "uid": "usr_36b5dd60b10a2085b8ec54bc",
+    "username": "learner_1792569900840",
+    "email": "learner_1792569900840@classroomlm.app",
+    "displayName": "Fresh Learner",
+    "passwordHash": "5e24de7c2c308cb973ed5b92e2d2b9c8df15d29dd373c6bc1ac5bc9d2ee66eebb67fa27d0a52f4088cd7af278ffdb7587951ce81c7ef04c0a002c7aa2fb15136",
+    "salt": "925841ddfe284499fd3a29d202d94690",
+    "createdAt": "2026-10-21T08:05:00.926Z"
+  }
+]

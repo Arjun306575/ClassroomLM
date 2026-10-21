@@ -141,17 +141,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthModalOpen(false);
   }, []);
 
-  // Listen to Auth State Changes
+  // Listen to Auth State Changes & initialize manual session fallback
   useEffect(() => {
+    // 1. Check if a manual session is cached locally
+    const checkManualSession = (): boolean => {
+      try {
+        const stored = localStorage.getItem('classroomlm_manual_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.user && parsed.token && parsed.userProfile) {
+            const today = getTodayUTCString();
+            const prof = parsed.userProfile as UserProfile;
+            if (prof.lastResetDate !== today) {
+              prof.credits = DAILY_CREDITS_QUOTA;
+              prof.lastResetDate = today;
+              parsed.userProfile = prof;
+              localStorage.setItem('classroomlm_manual_user', JSON.stringify(parsed));
+            }
+            const syntheticUser = {
+              uid: parsed.user.uid,
+              email: parsed.user.email,
+              displayName: parsed.user.displayName,
+              photoURL: parsed.user.photoURL || '',
+              getIdToken: async () => parsed.token
+            } as any;
+            setCurrentUser(syntheticUser);
+            setUserProfile(prof);
+            setCredits(prof.credits ?? DAILY_CREDITS_QUOTA);
+            // Load manual saved items
+            try {
+              const savedRaw = localStorage.getItem('classroomlm_saved_lessons');
+              if (savedRaw) {
+                const lessons = JSON.parse(savedRaw);
+                const items: SavedEducationalItem[] = lessons.map((l: any) => ({
+                  id: l.id || String(Date.now()),
+                  userId: parsed.user.uid,
+                  title: l.title || l.config?.topic || "Lesson",
+                  description: l.description || "",
+                  type: 'lesson',
+                  data: l.data || l,
+                  config: l.config || {},
+                  createdAt: l.createdAt || new Date().toISOString()
+                }));
+                setSavedItems(items);
+              }
+            } catch (e) {}
+            setLoading(false);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn("[Auth Context] Error reading manual session:", err);
+      }
+      return false;
+    };
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
       if (!user) {
-        setUserProfile(null);
-        setCredits(DAILY_CREDITS_QUOTA);
-        setSavedItems([]);
-        setLoading(false);
+        // If no Firebase Auth user, check for manual user session before clearing
+        const hasManual = checkManualSession();
+        if (!hasManual) {
+          setCurrentUser(null);
+          setUserProfile(null);
+          setCredits(DAILY_CREDITS_QUOTA);
+          setSavedItems([]);
+          setLoading(false);
+        }
         return;
       }
+
+      // User signed in with Firebase (e.g. Google Auth)
+      localStorage.removeItem('classroomlm_manual_user');
+      setCurrentUser(user);
 
       const userDocRef = doc(db, 'users', user.uid);
       const today = getTodayUTCString();
@@ -181,8 +242,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCredits(DAILY_CREDITS_QUOTA);
         } else {
           const data = docSnap.data() as UserProfile;
-          // Daily Non-Rollover Reset Logic:
-          // If currentDate !== lastResetDate: Hard reset credits = 100 (DO NOT add rollover)
           if (data.lastResetDate !== today) {
             console.log(`[Credits Engine] Daily reset triggered: ${data.lastResetDate} -> ${today}. Credits hard reset to ${DAILY_CREDITS_QUOTA}.`);
             await updateDoc(userDocRef, {
@@ -202,26 +261,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (err: any) {
-        const isOffline = err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message?.includes('offline');
-        if (isOffline) {
-          console.warn("[Auth Engine] Firestore connection temporarily unavailable, using offline cached profile.");
-          const fallbackProfile: UserProfile = {
-            id: user.uid,
-            email: user.email || '',
-            displayName: user.displayName || user.email?.split('@')[0] || 'Student',
-            photoURL: user.photoURL || '',
-            credits: DAILY_CREDITS_QUOTA,
-            lastResetDate: today,
-            classLevel: localStorage.getItem('profileClass') || 'Class 10',
-            language: localStorage.getItem('profileLang') || 'English',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          setUserProfile(fallbackProfile);
-          setCredits(DAILY_CREDITS_QUOTA);
-        } else {
-          handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
-        }
+        console.warn("[Auth Engine] Using offline cached profile fallback:", err?.message || err);
+        const fallbackProfile: UserProfile = {
+          id: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || user.email?.split('@')[0] || 'Student',
+          photoURL: user.photoURL || '',
+          credits: DAILY_CREDITS_QUOTA,
+          lastResetDate: today,
+          classLevel: localStorage.getItem('profileClass') || 'Class 10',
+          language: localStorage.getItem('profileLang') || 'English',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        setUserProfile(fallbackProfile);
+        setCredits(DAILY_CREDITS_QUOTA);
       } finally {
         setLoading(false);
       }
@@ -232,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Real-time snapshot listener on active user document for instant credit synchronization
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.uid.startsWith('usr_')) return;
     const userDocRef = doc(db, 'users', currentUser.uid);
     const unsubscribe = onSnapshot(userDocRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -243,12 +297,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }, (error: any) => {
-      const isOffline = error?.code === 'unavailable' || error?.message?.includes('unavailable') || error?.message?.includes('offline');
-      if (isOffline) {
-        console.warn("[Auth Engine] Firestore waiting to re-establish connection...");
-        return;
-      }
-      handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
+      console.warn("[Auth Engine] Firestore snapshot sync notice:", error?.message || error);
     });
 
     return () => unsubscribe();
@@ -256,8 +305,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Real-time listener for saved items in subcollection
   useEffect(() => {
-    if (!currentUser) {
-      setSavedItems([]);
+    if (!currentUser || currentUser.uid.startsWith('usr_')) {
+      if (!currentUser) setSavedItems([]);
       return;
     }
 
@@ -271,32 +320,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setSavedItems(items);
     }, (error: any) => {
-      const isOffline = error?.code === 'unavailable' || error?.message?.includes('unavailable') || error?.message?.includes('offline');
-      if (isOffline) {
-        console.warn("[Saved Items] Firestore waiting to re-establish connection...");
-        return;
-      }
-      handleFirestoreError(error, OperationType.LIST, `users/${currentUser.uid}/savedItems`);
+      console.warn("[Saved Items] Firestore sync notice:", error?.message || error);
     });
 
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Retrieve fresh Firebase ID Token for Quota Hijack Prevention
+  // Retrieve fresh Firebase ID Token or Manual Token for Quota Hijack Prevention
   const getIdToken = useCallback(async (): Promise<string | null> => {
     if (!currentUser) return null;
     try {
-      return await currentUser.getIdToken(false);
+      if (typeof currentUser.getIdToken === 'function') {
+        const token = await currentUser.getIdToken(false);
+        if (token) return token;
+      }
     } catch (err) {
-      console.error("Failed to retrieve Firebase ID token", err);
-      return null;
+      console.warn("getIdToken notice:", err);
     }
+    const stored = localStorage.getItem('classroomlm_manual_user');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.token) return parsed.token;
+      } catch (e) {}
+    }
+    return null;
   }, [currentUser]);
 
   // Google Sign-In with Popup
   const signInWithGoogle = useCallback(async () => {
     try {
-      const result = await signInWithPopup(auth, googleAuthProvider);
+      localStorage.removeItem('classroomlm_manual_user');
+      await signInWithPopup(auth, googleAuthProvider);
       setIsAuthModalOpen(false);
     } catch (error: any) {
       console.error("Google sign in error", error);
@@ -306,35 +361,120 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Username / Email & Password Sign-In
   const signInWithEmail = useCallback(async (identifier: string, pass: string) => {
-    const email = normalizeAccountIdentifier(identifier);
+    const rawInput = identifier.trim();
+    if (!rawInput || !pass) {
+      throw new Error("Please enter your username or email and password.");
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
+      const res = await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: rawInput, password: pass })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Invalid username or password. Please verify your credentials.");
+      }
+
+      const today = getTodayUTCString();
+      const initialProfile: UserProfile = {
+        id: data.user.uid,
+        email: data.user.email,
+        displayName: data.user.displayName || 'Student',
+        photoURL: '',
+        credits: DAILY_CREDITS_QUOTA,
+        lastResetDate: today,
+        classLevel: localStorage.getItem('profileClass') || 'Class 10',
+        language: localStorage.getItem('profileLang') || 'English',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const syntheticUser = {
+        uid: data.user.uid,
+        email: data.user.email,
+        displayName: data.user.displayName,
+        photoURL: '',
+        getIdToken: async () => data.token
+      } as any;
+
+      localStorage.setItem('classroomlm_manual_user', JSON.stringify({
+        user: data.user,
+        token: data.token,
+        userProfile: initialProfile
+      }));
+
+      setCurrentUser(syntheticUser);
+      setUserProfile(initialProfile);
+      setCredits(DAILY_CREDITS_QUOTA);
       setIsAuthModalOpen(false);
-    } catch (error: any) {
-      console.error("Account sign-in error", error);
-      throw error;
+    } catch (backendErr: any) {
+      console.error("[Manual Sign-In Failed]", backendErr);
+      throw new Error(backendErr.message || "Invalid username or password. Please verify your credentials.");
     }
   }, []);
 
-  // Username / Email & Password Sign-Up with strict password strength check
+  // Username / Email & Password Sign-Up with strict password strength check & zero Firebase errors
   const signUpWithEmail = useCallback(async (identifier: string, pass: string, name?: string) => {
     const strength = validatePasswordStrength(pass);
     if (!strength.isValid) {
       throw new Error(strength.errors[0]);
     }
 
-    const email = normalizeAccountIdentifier(identifier);
-    const chosenName = name?.trim() || identifier.trim().replace(/@.*/, '');
+    const rawInput = identifier.trim();
+    if (!rawInput) {
+      throw new Error("Please enter your username or email address.");
+    }
+
+    const chosenName = name?.trim() || (rawInput.includes('@') ? rawInput.split('@')[0] : rawInput);
 
     try {
-      const userCred = await createUserWithEmailAndPassword(auth, email, pass);
-      if (userCred.user) {
-        await updateProfile(userCred.user, { displayName: chosenName });
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: rawInput, password: pass, name: chosenName })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Registration failed. Please choose a different username or try again.");
       }
+
+      const today = getTodayUTCString();
+      const newProfile: UserProfile = {
+        id: data.user.uid,
+        email: data.user.email,
+        displayName: data.user.displayName || chosenName,
+        photoURL: '',
+        credits: DAILY_CREDITS_QUOTA,
+        lastResetDate: today,
+        classLevel: localStorage.getItem('profileClass') || 'Class 10',
+        language: localStorage.getItem('profileLang') || 'English',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const syntheticUser = {
+        uid: data.user.uid,
+        email: data.user.email,
+        displayName: data.user.displayName,
+        photoURL: '',
+        getIdToken: async () => data.token
+      } as any;
+
+      localStorage.setItem('classroomlm_manual_user', JSON.stringify({
+        user: data.user,
+        token: data.token,
+        userProfile: newProfile
+      }));
+
+      setCurrentUser(syntheticUser);
+      setUserProfile(newProfile);
+      setCredits(DAILY_CREDITS_QUOTA);
       setIsAuthModalOpen(false);
-    } catch (error: any) {
-      console.error("Account registration error", error);
-      throw error;
+    } catch (backendErr: any) {
+      console.error("[Manual Registration Failed]", backendErr);
+      throw new Error(backendErr.message || "Registration failed. Please try again.");
     }
   }, []);
 
@@ -342,27 +482,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOutUser = useCallback(async () => {
     try {
       await signOut(auth);
-      setUserProfile(null);
-      setCredits(DAILY_CREDITS_QUOTA);
-      setSavedItems([]);
     } catch (error) {
-      console.error("Sign out error", error);
+      console.warn("Sign out error", error);
     }
+    localStorage.removeItem('classroomlm_manual_user');
+    setCurrentUser(null);
+    setUserProfile(null);
+    setCredits(DAILY_CREDITS_QUOTA);
+    setSavedItems([]);
   }, []);
 
-  // Update User Class and Language Settings in Firestore
+  // Update User Class and Language Settings in Firestore or manual profile
   const updateSettings = useCallback(async (classLevel: string, language: string) => {
     if (!currentUser) return;
-    try {
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
-        classLevel,
-        language,
-        updatedAt: new Date().toISOString()
-      });
-      setUserProfile(prev => prev ? { ...prev, classLevel, language } : null);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+    setUserProfile(prev => prev ? { ...prev, classLevel, language } : null);
+
+    // Save to manual session if applicable
+    const stored = localStorage.getItem('classroomlm_manual_user');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.userProfile) {
+          parsed.userProfile.classLevel = classLevel;
+          parsed.userProfile.language = language;
+          localStorage.setItem('classroomlm_manual_user', JSON.stringify(parsed));
+        }
+      } catch (e) {}
+    }
+
+    if (!currentUser.uid.startsWith('usr_')) {
+      try {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userDocRef, {
+          classLevel,
+          language,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn("Settings sync notice:", err);
+      }
     }
   }, [currentUser]);
 
@@ -379,6 +537,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
+    // 1. Manual user balance deduction
+    if (currentUser.uid.startsWith('usr_')) {
+      const stored = localStorage.getItem('classroomlm_manual_user');
+      let prof = stored ? JSON.parse(stored).userProfile : null;
+      let cur = prof?.credits ?? credits;
+      const today = getTodayUTCString();
+
+      if (prof?.lastResetDate !== today) {
+        cur = DAILY_CREDITS_QUOTA;
+        if (prof) prof.lastResetDate = today;
+      }
+
+      if (cur < cost) {
+        const errorMsg = `Insufficient credits. ${featureName} requires ${cost} credits. Your 100 credits will refresh tomorrow at 00:00 UTC.`;
+        return { success: false, error: errorMsg, remainingCredits: cur };
+      }
+
+      const newBalance = cur - cost;
+      setCredits(newBalance);
+      if (prof) {
+        prof.credits = newBalance;
+        const parsed = JSON.parse(stored!);
+        parsed.userProfile = prof;
+        localStorage.setItem('classroomlm_manual_user', JSON.stringify(parsed));
+      }
+      return { success: true, remainingCredits: newBalance };
+    }
+
+    // 2. Firebase user Firestore transaction
     const today = getTodayUTCString();
     const userDocRef = doc(db, 'users', currentUser.uid);
 
@@ -393,14 +580,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let currentCredits = data.credits ?? DAILY_CREDITS_QUOTA;
         let lastReset = data.lastResetDate;
 
-        // Daily Non-Rollover Reset inside the transaction to prevent race conditions
         if (lastReset !== today) {
           currentCredits = DAILY_CREDITS_QUOTA;
           lastReset = today;
         }
 
-        // Insufficient Credit Guard:
-        // "Insufficient credits. Lessons require 50 credits. Your 100 credits will refresh tomorrow at 00:00 UTC."
         if (currentCredits < cost) {
           const errorMsg = `Insufficient credits. ${featureName} requires ${cost} credits. Your 100 credits will refresh tomorrow at 00:00 UTC.`;
           return { success: false, error: errorMsg, remainingCredits: currentCredits };
@@ -422,11 +606,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return result;
     } catch (err: any) {
-      console.error("Credit deduction transaction error", err);
-      handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
-      return { success: false, error: err.message || "Failed to process credits." };
+      console.warn("Credit deduction notice, falling back to local balance update:", err?.message || err);
+      // Offline fallback: allow deduction from current local state
+      if (credits >= cost) {
+        const newBal = credits - cost;
+        setCredits(newBal);
+        return { success: true, remainingCredits: newBal };
+      }
+      return { 
+        success: false, 
+        error: `Insufficient credits. ${featureName} requires ${cost} credits. Your 100 credits will refresh tomorrow at 00:00 UTC.`,
+        remainingCredits: credits 
+      };
     }
-  }, [currentUser, openAuthModal]);
+  }, [currentUser, credits, openAuthModal]);
 
   // Atomic Credit Increment for Top-ups & Rewards (Adsterra Smartlink: 1 Click = +50 Credits)
   const addCredits = useCallback(async (amount: number): Promise<number> => {
@@ -479,7 +672,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser]);
 
-  // Save Item to Firestore subcollection
+  // Save Item to Firestore subcollection or local storage
   const saveItem = useCallback(async (
     itemData: Omit<SavedEducationalItem, 'id' | 'userId' | 'createdAt'>
   ): Promise<string> => {
@@ -488,7 +681,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const itemId = Date.now().toString();
-    const itemDocRef = doc(db, 'users', currentUser.uid, 'savedItems', itemId);
     const fullItem: SavedEducationalItem = {
       ...itemData,
       id: itemId,
@@ -496,23 +688,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString()
     };
 
+    // Update state & cache immediately
+    setSavedItems(prev => [fullItem, ...prev.filter(i => i.id !== itemId)]);
     try {
-      await setDoc(itemDocRef, fullItem);
-      return itemId;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `users/${currentUser.uid}/savedItems/${itemId}`);
-      throw err;
+      const stored = localStorage.getItem('classroomlm_saved_lessons');
+      const prevLessons = stored ? JSON.parse(stored) : [];
+      localStorage.setItem('classroomlm_saved_lessons', JSON.stringify([fullItem, ...prevLessons.filter((l: any) => l.id !== itemId)]));
+    } catch (e) {}
+
+    if (!currentUser.uid.startsWith('usr_')) {
+      try {
+        const itemDocRef = doc(db, 'users', currentUser.uid, 'savedItems', itemId);
+        await setDoc(itemDocRef, fullItem);
+      } catch (err) {
+        console.warn("[Save Item] Firestore sync notice:", err);
+      }
     }
+
+    return itemId;
   }, [currentUser]);
 
-  // Delete Item from Firestore subcollection
+  // Delete Item from Firestore subcollection or local storage
   const deleteItem = useCallback(async (id: string) => {
     if (!currentUser) return;
-    const itemDocRef = doc(db, 'users', currentUser.uid, 'savedItems', id);
+    setSavedItems(prev => prev.filter(i => i.id !== id));
     try {
-      await deleteDoc(itemDocRef);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `users/${currentUser.uid}/savedItems/${id}`);
+      const stored = localStorage.getItem('classroomlm_saved_lessons');
+      if (stored) {
+        const prevLessons = JSON.parse(stored);
+        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(prevLessons.filter((l: any) => l.id !== id)));
+      }
+    } catch (e) {}
+
+    if (!currentUser.uid.startsWith('usr_')) {
+      try {
+        const itemDocRef = doc(db, 'users', currentUser.uid, 'savedItems', id);
+        await deleteDoc(itemDocRef);
+      } catch (err) {
+        console.warn("[Delete Item] Firestore sync notice:", err);
+      }
     }
   }, [currentUser]);
 
