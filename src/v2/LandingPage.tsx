@@ -23,6 +23,7 @@ import { AdsterraAd } from '../components/AdsterraAd';
 import { CreditModal } from '../components/CreditModal';
 import { photosynthesisLesson } from '../data/sampleLessons/photosynthesis';
 import { getFreeAISearchesRemaining, useFreeAISearch, FREE_SEARCHES_EVENT } from '../utils/freePasses';
+import { unlockAudio } from './audioManager';
 
 interface LandingPageProps {
   onGenerate: (config: any) => void;
@@ -191,6 +192,7 @@ export function LandingPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    unlockAudio();
     const effectiveTopic = topic.trim() || (modalUploadedFile ? modalUploadedFile.name.replace(/\.[^/.]+$/, "") : "");
     if (!effectiveTopic && !modalUploadedFile) return;
 
@@ -387,6 +389,7 @@ export function LandingPage({
   });
 
   const handleOpenSavedItem = (item: any) => {
+    unlockAudio();
     setIsSavedDrawerOpen(false);
     if (item.isMagicLens) {
       setMagicResult(item.data?.result || "");
@@ -406,6 +409,7 @@ export function LandingPage({
   };
 
   const handleTriggerDemo = () => {
+    unlockAudio();
     if (onLoadDemoLesson) {
       onLoadDemoLesson();
     } else if (onLoadLesson) {
@@ -557,7 +561,7 @@ export function LandingPage({
           className="flex flex-col items-center w-full"
         >
           <p className={`mt-3 sm:mt-5 mb-8 sm:mb-10 text-sm sm:text-base md:text-xl font-medium max-w-2xl text-center px-3 leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-            Step into a live, interactive learning environment. A dedicated AI teacher awaits to explain complex topics visually.
+            Step into a live, interactive learning environment. A dedicated 2D AI Board Explainer awaits to explain complex topics visually.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 w-full max-w-2xl px-3">
@@ -598,9 +602,9 @@ export function LandingPage({
           {[
             {
               icon: "👨‍🏫",
-              badge: "Real-Time 2D Teacher",
-              title: "Real-Time 2D Teacher",
-              desc: "Experience animated interactive lectures with expressive 2D character teaching, dynamic chalkboard illustrations, and zero latency.",
+              badge: "2D AI Board Explainer",
+              title: "2D AI Board Explainer",
+              desc: "Experience animated interactive lectures with dynamic chalkboard illustrations, responsive visual breakdowns, and zero latency.",
               iconStyle: isDarkMode 
                 ? "bg-gradient-to-tr from-blue-600/25 via-indigo-600/30 to-cyan-500/25 border-blue-400/50 text-blue-300 shadow-[0_0_25px_rgba(59,130,246,0.35)] group-hover:rotate-3"
                 : "bg-gradient-to-tr from-blue-100 via-indigo-50 to-cyan-100 border-2 border-blue-300/80 text-blue-900 shadow-sm group-hover:rotate-3",
@@ -1128,12 +1132,12 @@ export function LandingPage({
                       </div>
                     </div>
 
-                    {/* Teacher Persona */}
+                    {/* Explainer Persona */}
                     <div>
                       <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${
                         isDarkMode ? 'text-slate-300' : 'text-slate-700'
                       }`}>
-                        Teacher Persona
+                        Explainer Persona
                       </label>
                       <div className="grid grid-cols-2 gap-2">
                         {personas.map(p => (

@@ -1048,7 +1048,7 @@ export default function ClassroomScene({
               exit={{ opacity: 0, y: -20 }}
               className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-400 text-slate-900 px-6 py-2 rounded-full font-bold shadow-xl border-4 border-amber-300 text-sm flex items-center gap-2"
             >
-              🌟 <span>Your AI Teacher is taking a quick 60-second brain break! Resume lesson in {remainingSeconds}s...</span>
+              🌟 <span>Your 2D AI Board Explainer is taking a quick 60-second brain break! Resume lesson in {remainingSeconds}s...</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1196,7 +1196,7 @@ export default function ClassroomScene({
               <div className={`flex items-center gap-1.5 text-[9px] font-extrabold uppercase font-mono tracking-widest ${
                 isDarkMode ? "text-indigo-400" : "text-indigo-600"
               }`}>
-                <span>{interruptedDoubt ? "AI Teacher (Replying to Doubt)" : "AI Teacher Dialogue"}</span>
+                <span>{interruptedDoubt ? "2D AI Board Explainer (Replying to Doubt)" : "2D AI Board Explainer Dialogue"}</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
               </div>
 
@@ -1627,7 +1627,7 @@ export default function ClassroomScene({
                     </>
                   ) : (
                     <>
-                      <span>Ask AI Teacher</span>
+                      <span>Ask 2D AI Board Explainer</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </>
                   )}
@@ -1731,7 +1731,7 @@ export default function ClassroomScene({
       ) : (
         <div className="flex items-center justify-between gap-4 bg-yellow-500/10 p-3 rounded-2xl border border-yellow-500/30">
           <p className="text-xs text-yellow-400 font-sans font-medium">
-            💡 <strong>AI Teacher is answering:</strong> "{interruptedDoubt.dialogue.slice(0, 50)}..."
+            💡 <strong>2D AI Board Explainer is answering:</strong> "{interruptedDoubt.dialogue.slice(0, 50)}..."
           </p>
           <button
             onClick={onResolveInterruption}

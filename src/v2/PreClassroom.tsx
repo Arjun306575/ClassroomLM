@@ -33,7 +33,7 @@ export function PreClassroom({ lessonData, onEnter, onSaveLater, onGoHome, isDar
             "{lessonData?.title || 'Interactive Lesson'}"
           </p>
           <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-            Interactive blackboard slides with AI Teacher & fresh assessment quiz at the end
+            Interactive blackboard slides with 2D AI Board Explainer & fresh assessment quiz at the end
           </p>
         </motion.div>
 

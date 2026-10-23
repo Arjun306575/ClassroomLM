@@ -3534,7 +3534,7 @@ export default function App() {
                         </div>
 
                         <p className={`text-xs font-semibold leading-relaxed mb-6 font-sans ${isDarkMode ? "text-slate-300" : "text-slate-600"}`}>
-                          The virtual AI Teacher has prepared a <strong>{lesson.timeline.length}-part personalized curriculum</strong> with visual whiteboards, interactive gestures, translations, and a final assessment quiz tailored for you.
+                          The virtual 2D AI Board Explainer has prepared a <strong>{lesson.timeline.length}-part personalized curriculum</strong> with visual whiteboards, interactive gestures, translations, and a final assessment quiz tailored for you.
                         </p>
 
                         {/* Player below the text */}
@@ -4350,7 +4350,7 @@ export default function App() {
                           <div className="flex items-center gap-2 shrink-0">
                             <span className="text-2xl">👩‍🏫</span>
                             <div>
-                              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400 block leading-none">AI Teacher</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400 block leading-none">2D AI Board Explainer</span>
                               <span className="text-[10px] font-bold text-slate-400">Personalized Feedback</span>
                             </div>
                           </div>
@@ -4547,7 +4547,7 @@ export default function App() {
                   <div className="flex-1 relative">
                     <input
                       type="text"
-                      placeholder={isRateLimited ? `Teacher is taking a quick breather (${remainingSeconds}s remaining)...` : isListening ? "Listening... Speak your question!" : "Why is chlorophyll green? Ask the AI Teacher mid-lesson..."}
+                      placeholder={isRateLimited ? `Explainer is taking a quick breather (${remainingSeconds}s remaining)...` : isListening ? "Listening... Speak your question!" : "Why is chlorophyll green? Ask the 2D AI Board Explainer mid-lesson..."}
                       value={doubtText}
                       onChange={(e) => setDoubtText(e.target.value)}
                       onKeyDown={(e) => {
@@ -4626,7 +4626,7 @@ export default function App() {
               <p className={`text-xs font-semibold mb-4 max-w-xs font-sans leading-relaxed transition-colors ${
                 isDarkMode ? "text-slate-300" : "text-slate-600"
               }`}>
-                Transform study guides, videos, or prompts into a magical animated classroom with your friendly AI teacher!
+                Transform study guides, videos, or prompts into a magical animated classroom with your 2D AI Board Explainer!
               </p>
 
               <div className={`p-3 rounded-2xl border-2 text-left w-full shadow-sm transition-colors mb-4 ${

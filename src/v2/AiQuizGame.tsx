@@ -422,7 +422,7 @@ export function AiQuizGame({
             <p className="text-xs sm:text-sm text-slate-300 mb-4 max-w-sm">
               {isPerfectScore
                 ? "You answered every single question correctly before the clock ran out!"
-                : "You tested your rapid-fire reflexes against the AI teacher."}
+                : "You tested your rapid-fire reflexes against the 2D AI Board Explainer."}
             </p>
 
             {/* Score Stats Badge */}

@@ -1868,9 +1868,9 @@ function createWavFromPcm(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
   const cleanPcm = Buffer.from(pcmBuffer.subarray(0, safeLength));
   const numSamples = safeLength / 2;
 
-  if (numSamples > 10) {
+  if (numSamples > 20) {
     // 1. Gentle fade-in (first ~10ms = 240 samples) to eliminate startup pop
-    const fadeInSamples = Math.min(240, Math.floor(numSamples / 6));
+    const fadeInSamples = Math.min(240, Math.floor(numSamples * 0.05));
     for (let i = 0; i < fadeInSamples; i++) {
       const byteOffset = i * 2;
       const sampleVal = cleanPcm.readInt16LE(byteOffset);
@@ -1878,38 +1878,21 @@ function createWavFromPcm(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
       cleanPcm.writeInt16LE(Math.round(sampleVal * factor), byteOffset);
     }
 
-    // 2. Scan backwards to locate the true end of audible speech (> 160 amplitude)
-    let lastAudibleSample = numSamples - 1;
-    for (let i = numSamples - 1; i >= 0; i--) {
-      const val = cleanPcm.readInt16LE(i * 2);
-      if (Math.abs(val) > 160) {
-        lastAudibleSample = i;
-        break;
-      }
-    }
-
-    // Decay smoothly over 120ms after last audible speech
-    const decayEndSample = Math.min(numSamples, lastAudibleSample + Math.round(sampleRate * 0.05));
-    const fadeOutSamples = Math.min(Math.round(sampleRate * 0.12), decayEndSample);
-    const fadeStartSample = Math.max(0, decayEndSample - fadeOutSamples);
-
-    for (let i = fadeStartSample; i < decayEndSample; i++) {
+    // 2. Micro fade-out ONLY at the very end of the buffer (final ~25ms = 600 samples)
+    // Smoothly brings the waveform to 0V without truncating spoken words or creating noise bursts
+    const fadeOutSamples = Math.min(600, Math.floor(numSamples * 0.08));
+    const fadeStartSample = numSamples - fadeOutSamples;
+    for (let i = fadeStartSample; i < numSamples; i++) {
       const byteOffset = i * 2;
       const sampleVal = cleanPcm.readInt16LE(byteOffset);
-      const progress = (i - fadeStartSample) / (decayEndSample - fadeStartSample);
+      const progress = (i - fadeStartSample) / fadeOutSamples;
       const factor = 0.5 * (1 + Math.cos(Math.PI * progress));
-      const smoothVal = Math.round(sampleVal * factor);
-      cleanPcm.writeInt16LE(Math.max(-32768, Math.min(32767, smoothVal)), byteOffset);
-    }
-
-    // 3. Strictly zero all subsequent samples to total silence
-    for (let i = decayEndSample; i < numSamples; i++) {
-      cleanPcm.writeInt16LE(0, i * 2);
+      cleanPcm.writeInt16LE(Math.round(sampleVal * factor), byteOffset);
     }
   }
 
-  // 4. Append 160ms of true silence (3840 zero samples = 7680 zero bytes) so audio output smoothly settles
-  const silenceSamples = Math.round(sampleRate * 0.16);
+  // 3. Append 80ms of clean silence (1920 zero samples = 3840 zero bytes) so audio settles cleanly
+  const silenceSamples = Math.round(sampleRate * 0.08);
   const silencePad = Buffer.alloc(silenceSamples * 2);
 
   const totalAudioData = Buffer.concat([cleanPcm, silencePad]);

@@ -13,10 +13,10 @@ import 'katex/dist/katex.min.css';
 import { PreClassroom } from './PreClassroom';
 import { InteractiveQuiz2D } from './InteractiveQuiz2D';
 import { TeacherMascot2D } from './TeacherMascot2D';
-import { FuturisticTeacher3D } from './FuturisticTeacher3D';
 import { AiQuizGame } from './AiQuizGame';
 import { useAuth } from '../firebase/authContext';
 import { QuizQuestion } from '../types';
+import { getAudioContext, unlockAudio, smoothAudioBuffer } from './audioManager';
 
 // Official valid Gemini voices: 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
 const languageMap: Record<string, { lang: string, voice: string }> = {
@@ -93,15 +93,15 @@ const ChalkboardEquationSpan = ({ equation }: { equation: string }) => {
   }, [equation]);
 
   return (
-    <span className="text-base sm:text-lg md:text-xl font-bold font-mono text-amber-300 bg-amber-950/70 px-4 py-1.5 rounded-xl border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.25)] inline-flex items-center gap-2 max-w-full overflow-x-auto scrollbar-hide">
-      <Sparkles className="w-4 h-4 text-amber-400 shrink-0 opacity-80" />
-      <div className="chalk-math-container inline-flex items-center gap-1.5 leading-none">
+    <span className="text-xs sm:text-sm md:text-base font-bold font-mono text-amber-300 bg-amber-950/70 px-2.5 py-1 sm:px-3 sm:py-1 rounded-lg border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] inline-flex items-center gap-1.5 shrink-0 max-w-[48%] overflow-x-auto scrollbar-hide">
+      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 opacity-80" />
+      <div className="chalk-math-container inline-flex items-center gap-1 leading-none text-xs sm:text-sm">
         <Markdown
           remarkPlugins={[remarkMath, remarkGfm]}
           rehypePlugins={[rehypeKatex]}
           components={{
             p({ children }) {
-              return <span className="inline-flex items-center gap-1.5">{children}</span>;
+              return <span className="inline-flex items-center gap-1">{children}</span>;
             },
             strong({ children }) {
               return <strong className="font-extrabold text-amber-200">{children}</strong>;
@@ -110,7 +110,7 @@ const ChalkboardEquationSpan = ({ equation }: { equation: string }) => {
               return <em className="italic text-cyan-200">{children}</em>;
             },
             code({ children }) {
-              return <code className="bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-mono text-sm">{children}</code>;
+              return <code className="bg-amber-900/60 text-amber-200 px-1 py-0.5 rounded font-mono text-xs">{children}</code>;
             }
           }}
         >
@@ -162,34 +162,34 @@ const Blackboard2D = ({
   const shouldShowImage = isVisualDiagramsSelected && Boolean(displayImage);
 
   return (
-    <div className="w-full h-full bg-[#182336] border-[8px] md:border-[12px] border-[#334155] rounded-2xl shadow-[inset_0_0_80px_rgba(0,0,0,0.6),_0_20px_40px_rgba(0,0,0,0.5)] relative overflow-hidden flex flex-col p-4 md:p-6">
+    <div className="w-full h-full bg-gradient-to-br from-[#0c201a] via-[#091a15] to-[#061410] border-2 sm:border-[6px] md:border-[8px] border-[#1d2d25] ring-1 ring-emerald-500/20 rounded-xl sm:rounded-2xl landscape:border-2 landscape:rounded-lg shadow-[inset_0_0_70px_rgba(0,0,0,0.85),_0_15px_35px_rgba(0,0,0,0.6)] relative overflow-hidden flex flex-col p-2 sm:p-3.5 md:p-5 landscape:p-1.5 select-text">
       {/* Blackboard chalk grain texture */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px]" />
+      <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:18px_18px]" />
       
       {/* Chalk tray at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-3.5 bg-[#475569] border-t border-[#64748b] flex items-center px-8 gap-4 z-20">
-        <div className="w-12 h-1.5 bg-white/90 rounded-full shadow-sm" />
-        <div className="w-8 h-1.5 bg-amber-200/90 rounded-full shadow-sm" />
-        <div className="w-10 h-1.5 bg-cyan-200/90 rounded-full shadow-sm" />
-        <div className="w-9 h-1.5 bg-emerald-200/90 rounded-full shadow-sm" />
+      <div className="absolute bottom-0 left-0 right-0 h-1.5 sm:h-2.5 landscape:h-1.5 bg-[#17251e] border-t border-[#23382d] flex items-center px-4 sm:px-8 gap-2.5 sm:gap-4 z-20">
+        <div className="w-6 sm:w-10 h-1 bg-white/90 rounded-full shadow-sm" />
+        <div className="w-5 sm:w-7 h-1 bg-amber-200/90 rounded-full shadow-sm" />
+        <div className="w-6 sm:w-8 h-1 bg-emerald-200/90 rounded-full shadow-sm" />
+        <div className="w-5 sm:w-7 h-1 bg-cyan-200/90 rounded-full shadow-sm" />
       </div>
 
-      <div className="relative z-10 w-full h-full flex flex-col">
-        {/* Title & Math Equation header */}
+      <div className="relative z-10 w-full h-full flex flex-col min-h-0">
+        {/* Title & Math Equation header: Fits in single row to maximize blackboard height */}
         {heading && (
-          <div className="border-b border-white/15 pb-2.5 mb-2.5 shrink-0 flex flex-wrap items-center justify-between gap-3">
+          <div className="border-b border-emerald-500/20 pb-1 sm:pb-1.5 landscape:pb-0.5 mb-1 sm:mb-1.5 landscape:mb-1 shrink-0 flex flex-row items-center justify-between gap-1.5 sm:gap-2 flex-nowrap">
             <motion.div 
-              initial={{ opacity: 0, y: -8 }}
+              initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               key={heading}
-              className="text-xl sm:text-2xl md:text-3xl font-black text-white/95 font-sans tracking-tight"
-              style={{ textShadow: "0px 2px 8px rgba(0,0,0,0.6)" }}
+              className="text-xs sm:text-base md:text-xl landscape:text-xs font-black text-white font-sans tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)] truncate max-w-[55%] landscape:max-w-[50%]"
+              title={typeof heading === 'string' ? heading : undefined}
             >
               <Markdown
                 remarkPlugins={[remarkMath, remarkGfm]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
-                  p({ children }) { return <span className="inline font-sans">{children}</span>; }
+                  p({ children }) { return <span className="inline font-sans truncate">{children}</span>; }
                 }}
               >
                 {heading}
@@ -202,28 +202,28 @@ const Blackboard2D = ({
         )}
 
         {/* Content Area */}
-        <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0">
+        <div className="flex-1 flex flex-col md:flex-row gap-2 md:gap-4 min-h-0">
           {/* Bullets List - Neat, understandable, highly legible modern educational font */}
-          <div className={`flex-1 flex flex-col justify-start gap-2 sm:gap-2.5 overflow-y-auto pr-2 custom-chalk-scrollbar ${shouldShowImage ? '' : 'w-full'}`}>
+          <div className={`flex-1 flex flex-col justify-start gap-1 sm:gap-1.5 landscape:gap-1 overflow-y-auto pr-1 sm:pr-2 pb-14 sm:pb-16 landscape:pb-12 custom-chalk-scrollbar ${shouldShowImage ? '' : 'w-full'}`}>
             <AnimatePresence mode="popLayout">
               {visibleBullets.map((b: string, i: number) => {
                 const isActive = activeLineIndex === -1 ? false : i === activeLineIndex;
                 return (
                   <motion.div 
                     key={b + i}
-                    initial={{ opacity: 0, x: -12 }}
+                    initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.22, ease: "easeOut" }}
-                    className={`text-sm sm:text-base md:text-lg font-sans font-medium flex items-start gap-2.5 sm:gap-3 leading-relaxed rounded-xl px-3 py-2 sm:py-2.5 transition-all ${
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className={`text-xs sm:text-sm md:text-base landscape:text-[11px] sm:landscape:text-xs font-sans font-medium flex items-start gap-1.5 sm:gap-2 leading-relaxed landscape:leading-snug rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 landscape:py-0.5 landscape:px-2 transition-all ${
                       isActive 
-                        ? 'bg-cyan-500/20 text-cyan-100 shadow-md border border-cyan-400/50' 
+                        ? 'bg-emerald-950/70 text-emerald-100 shadow-md border border-emerald-400/50' 
                         : 'text-slate-100 hover:bg-white/5 border border-transparent'
                     }`}
                   >
-                    <span className={`mt-0.5 shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold transition-all ${
+                    <span className={`mt-0.5 shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
                       isActive 
-                        ? 'bg-cyan-400 text-slate-950 shadow-[0_0_10px_rgba(34,211,238,0.8)] scale-110' 
-                        : 'bg-slate-800 text-amber-300 border border-amber-500/30'
+                        ? 'bg-emerald-400 text-slate-950 shadow-[0_0_8px_rgba(52,211,153,0.8)] scale-105' 
+                        : 'bg-emerald-950/80 text-amber-300 border border-amber-500/30'
                     }`}>
                       ✦
                     </span>
@@ -236,7 +236,7 @@ const Blackboard2D = ({
                             return <p className="inline m-0 font-sans">{children}</p>;
                           },
                           strong({ children }) {
-                            return <strong className="font-bold text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]">{children}</strong>;
+                            return <strong className="font-bold text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{children}</strong>;
                           },
                           em({ children }) {
                             return <em className="italic text-cyan-200">{children}</em>;
@@ -244,7 +244,7 @@ const Blackboard2D = ({
                           code(props) {
                             const { children } = props as any;
                             return (
-                              <code className="font-mono bg-slate-900/90 text-yellow-300 px-1.5 py-0.5 rounded border border-yellow-500/30 text-xs sm:text-sm">
+                              <code className="font-mono bg-emerald-950/90 text-yellow-300 px-1.5 py-0.5 rounded border border-yellow-500/30 text-xs sm:text-sm">
                                 {children}
                               </code>
                             );
@@ -259,7 +259,7 @@ const Blackboard2D = ({
               })}
             </AnimatePresence>
             {visibleBullets.length === 0 && (
-              <div className="text-slate-400 font-sans text-base sm:text-lg italic mt-4">
+              <div className="text-slate-400 font-sans text-xs sm:text-base italic mt-4">
                 Preparing chalkboard notes...
               </div>
             )}
@@ -354,6 +354,7 @@ export function LiveClassroom({
   const { getIdToken, currentUser, openAuthModal } = useAuth();
   const [isReady, setIsReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showLandscapeTip, setShowLandscapeTip] = useState(false);
   const isDemo = Boolean(lessonData?.isDemoLesson);
   const [demoPromptMessage, setDemoPromptMessage] = useState<string | null>(null);
   const demoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -442,6 +443,36 @@ export function LiveClassroom({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
+  // Mobile landscape prompt: brief, non-blocking toast, auto-dismisses in ~3.4s, avoids repeating in same classroom session
+  const hasShownLandscapeTipRef = useRef(false);
+  useEffect(() => {
+    if (isPreClass) return;
+    const checkPortraitTip = () => {
+      if (hasShownLandscapeTipRef.current) return;
+      const isPortrait = (window.innerHeight > window.innerWidth) || 
+        (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(orientation: portrait)').matches);
+      const isMobile = window.innerWidth <= 900;
+      if (isPortrait && isMobile) {
+        hasShownLandscapeTipRef.current = true;
+        setShowLandscapeTip(true);
+        const timer = setTimeout(() => {
+          if (isMountedRef.current) {
+            setShowLandscapeTip(false);
+          }
+        }, 3400);
+        return () => clearTimeout(timer);
+      }
+    };
+
+    checkPortraitTip();
+    window.addEventListener('resize', checkPortraitTip);
+    window.addEventListener('orientationchange', checkPortraitTip);
+    return () => {
+      window.removeEventListener('resize', checkPortraitTip);
+      window.removeEventListener('orientationchange', checkPortraitTip);
+    };
+  }, [isPreClass]);
+
   // Global mount/unmount audio killer & 100% Ad-Free Classroom guarantee
   useEffect(() => {
     isMountedRef.current = true;
@@ -500,7 +531,8 @@ export function LiveClassroom({
   const playAudioWithEmotion = useCallback(async (
     textWithEmotions: string, 
     bulletPointsToSync?: string[],
-    preCachedBase64Wav?: string
+    preCachedBase64Wav?: string,
+    currentStepRef?: any
   ) => {
     const sessionId = playbackSessionIdRef.current;
     if (!isMountedRef.current) return;
@@ -527,15 +559,10 @@ export function LiveClassroom({
     }
 
     try {
-      let base64Wav = preCachedBase64Wav;
+      let base64Wav = preCachedBase64Wav || currentStepRef?.ttsAudio;
 
       if (!base64Wav) {
-        // STRICT RULE: Never generate TTS again and again in demo or saved lessons!
-        const isSavedOrDemo = Boolean(lessonData?.isDemoLesson || lessonData?.isLoadedFromSaved || lessonData?.loadedFromSaved);
-        if (isSavedOrDemo) {
-          throw new Error("Demo and saved lessons use pre-saved TTS audio without generating TTS again.");
-        }
-
+        // Fetch fresh TTS audio if not pre-saved
         const res = await fetch("/api/tts", {
           method: "POST",
           headers: { 
@@ -553,20 +580,37 @@ export function LiveClassroom({
 
         const json = await res.json();
         base64Wav = json.audio || json.audioContent;
+        if (base64Wav && currentStepRef) {
+          // Cache onto current step so it NEVER generates again!
+          currentStepRef.ttsAudio = base64Wav;
+        }
       }
 
       if (!base64Wav || !isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
 
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      }
-      const ctx = audioContextRef.current;
+      const ctx = getAudioContext();
       if (ctx.state === 'suspended') {
         try {
           await ctx.resume();
         } catch (e) {
           console.warn("AudioContext resume waiting for user interaction:", e);
         }
+      }
+
+      // If still suspended because browser blocked autoplay without gesture,
+      // register a one-shot touch/click handler so user interaction immediately resumes audio
+      if (ctx.state === 'suspended') {
+        const resumeOnFirstTouch = async () => {
+          try {
+            await ctx.resume();
+            window.removeEventListener('touchstart', resumeOnFirstTouch, true);
+            window.removeEventListener('pointerdown', resumeOnFirstTouch, true);
+            window.removeEventListener('click', resumeOnFirstTouch, true);
+          } catch (e) {}
+        };
+        window.addEventListener('touchstart', resumeOnFirstTouch, true);
+        window.addEventListener('pointerdown', resumeOnFirstTouch, true);
+        window.addEventListener('click', resumeOnFirstTouch, true);
       }
 
       const binary = atob(base64Wav);
@@ -576,45 +620,12 @@ export function LiveClassroom({
         bytes[i] = binary.charCodeAt(i);
       }
 
-      const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+      const decodedBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
       if (!isMountedRef.current || playbackSessionIdRef.current !== sessionId) return;
 
-      // Clean Audio PCM Smoothing: eliminate clicks, pops, DC offset, and trailing static noise
-      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
-        const channelData = audioBuffer.getChannelData(ch);
-        const totalSamples = channelData.length;
-
-        // 1. Smooth 15ms fade-in to prevent startup pop
-        const fadeInSamples = Math.min(Math.floor(audioBuffer.sampleRate * 0.015), Math.floor(totalSamples * 0.05));
-        for (let i = 0; i < fadeInSamples; i++) {
-          channelData[i] *= (i / fadeInSamples);
-        }
-
-        // 2. Scan backwards to locate the true end of audible speech (eliminating trailing digital static / DC offset)
-        let lastAudibleIdx = totalSamples - 1;
-        for (let i = totalSamples - 1; i >= 0; i--) {
-          if (Math.abs(channelData[i]) > 0.005) {
-            lastAudibleIdx = i;
-            break;
-          }
-        }
-
-        // Allow 60ms natural decay, then taper smoothly to zero
-        const decayEndIdx = Math.min(totalSamples, lastAudibleIdx + Math.floor(audioBuffer.sampleRate * 0.06));
-        const fadeDuration = Math.min(Math.floor(audioBuffer.sampleRate * 0.12), decayEndIdx);
-        const fadeStartIdx = Math.max(0, decayEndIdx - fadeDuration);
-
-        for (let i = fadeStartIdx; i < decayEndIdx; i++) {
-          const progress = (i - fadeStartIdx) / (decayEndIdx - fadeStartIdx);
-          const factor = 0.5 * (1 + Math.cos(Math.PI * progress));
-          channelData[i] *= factor;
-        }
-
-        // 3. Strictly zero all trailing samples to guarantee absolute 0V digital silence
-        for (let i = decayEndIdx; i < totalSamples; i++) {
-          channelData[i] = 0;
-        }
-      }
+      // Clean Audio PCM Smoothing: 10ms micro fade-in and 25ms end cosine fade-out
+      // Eliminates DC clicks, end pops, and digital breaking without clipping speech
+      const audioBuffer = smoothAudioBuffer(decodedBuffer);
 
       if (!analyserRef.current) {
         analyserRef.current = ctx.createAnalyser();
@@ -643,14 +654,13 @@ export function LiveClassroom({
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
 
-      // Anti-cracking GainNode envelope: smooth gentle fade-out well before end of audio buffer
+      // Smooth GainNode: full 1.0 gain throughout dialogue, only gentle 15ms micro ramp at the absolute end
       const gainNode = ctx.createGain();
       const startTime = ctx.currentTime;
       gainNode.gain.setValueAtTime(1, startTime);
-      const fadeOutStart = Math.max(0, audioBuffer.duration - 0.22);
-      gainNode.gain.setValueAtTime(1, startTime + fadeOutStart);
-      gainNode.gain.linearRampToValueAtTime(0, startTime + Math.max(fadeOutStart + 0.01, audioBuffer.duration - 0.04));
-      gainNode.gain.setValueAtTime(0, startTime + audioBuffer.duration);
+      const finalFadeStart = Math.max(0, audioBuffer.duration - 0.015);
+      gainNode.gain.setValueAtTime(1, startTime + finalFadeStart);
+      gainNode.gain.linearRampToValueAtTime(0, startTime + audioBuffer.duration);
 
       source.connect(gainNode);
       gainNode.connect(ctx.destination);
@@ -665,13 +675,12 @@ export function LiveClassroom({
           setIsSpeaking(false);
           setIsSlideNarrationComplete(true);
         }
-        // Delayed, non-blocking cleanup so Web Audio render pipeline completes with zero transients
         setTimeout(() => {
           try {
             source.disconnect();
             gainNode.disconnect();
           } catch (e) {}
-        }, 250);
+        }, 150);
       };
 
       currentAudioSourceRef.current = source;
@@ -832,7 +841,7 @@ export function LiveClassroom({
 
     const spoken = step.spokenDialogue || step.bubbleCaption || "";
     if (spoken && isMountedRef.current && playbackSessionIdRef.current === sessionId) {
-      await playAudioWithEmotion(spoken, rawBullets, step.ttsAudio);
+      await playAudioWithEmotion(spoken, rawBullets, step.ttsAudio, step);
     } else if (isMountedRef.current && playbackSessionIdRef.current === sessionId) {
       setIsSpeaking(false);
       setIsSlideNarrationComplete(true);
@@ -921,9 +930,7 @@ export function LiveClassroom({
     initializedLessonIdRef.current = lessonKey;
 
     const initLesson = async () => {
-      setTimeout(() => {
-        if (isMountedRef.current) setIsReady(true);
-      }, 800);
+      if (isMountedRef.current) setIsReady(true);
 
       // Check if timeline was generated by GeneratingClassroom or loaded from Saved Content
       let existingTimeline = lessonData?.timeline || 
@@ -1313,7 +1320,7 @@ export function LiveClassroom({
               Preparing Full-Screen Classroom...
             </h2>
             <p className={`max-w-md text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-              Connecting AI teacher, chalkboard notes, and curriculum...
+              Connecting 2D AI Board Explainer, chalkboard notes, and curriculum...
             </p>
           </motion.div>
         )}
@@ -1344,11 +1351,11 @@ export function LiveClassroom({
       {!isPreClass && isReady && (
         <div className="flex-1 w-full h-full flex flex-col overflow-hidden bg-slate-950">
           
-          {/* TOP CLASSROOM NAVIGATION BAR - Clean, Mobile Optimized */}
-          <header className="h-11 sm:h-14 bg-slate-900/95 border-b border-slate-800 backdrop-blur-md px-2.5 sm:px-4 md:px-6 flex items-center justify-between shrink-0 z-30 shadow-md">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {/* TOP CLASSROOM NAVIGATION BAR - Clean, Mobile & Landscape Optimized */}
+          <header className="h-10 sm:h-14 landscape:h-9 bg-slate-900/95 border-b border-slate-800 backdrop-blur-md px-2 sm:px-4 landscape:px-2.5 flex items-center justify-between shrink-0 z-30 shadow-md">
+            <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
               <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              <h2 className="text-xs sm:text-sm md:text-base font-bold text-white tracking-wide truncate max-w-[160px] xs:max-w-[220px] sm:max-w-none">
+              <h2 className="text-xs sm:text-sm md:text-base font-bold text-white tracking-wide truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
                 {lessonData?.title || "ClassroomLM Live Session"}
               </h2>
               <span className="text-[10px] sm:text-xs bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2 py-0.5 rounded-full font-medium hidden md:inline shrink-0">
@@ -1361,7 +1368,7 @@ export function LiveClassroom({
               <button
                 type="button"
                 onClick={() => setIsQuizActive(false)}
-                className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 ${
+                className={`px-2 sm:px-3 py-0.5 sm:py-1 landscape:py-0.5 text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 ${
                   !isQuizActive
                     ? 'bg-indigo-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
@@ -1380,7 +1387,7 @@ export function LiveClassroom({
                     fetchFreshQuiz();
                   }
                 }}
-                className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 ${
+                className={`px-2 sm:px-3 py-0.5 sm:py-1 landscape:py-0.5 text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 ${
                   isQuizActive
                     ? 'bg-gradient-to-r from-cyan-400 to-indigo-500 text-slate-950 font-black shadow-md'
                     : currentStepIndex >= timeline.length - 1
@@ -1397,11 +1404,11 @@ export function LiveClassroom({
               </button>
             </div>
             
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
               {/* Fullscreen Toggle Button */}
               <button
                 onClick={toggleFullScreen}
-                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0"
+                className="w-6 h-6 sm:w-8 sm:h-8 landscape:w-6 landscape:h-6 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0"
                 title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
               >
                 {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
@@ -1410,7 +1417,7 @@ export function LiveClassroom({
               {/* Exit Button */}
               <button 
                 onClick={onExit}
-                className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold flex items-center gap-1 transition-colors shadow-sm shrink-0"
+                className="px-2 sm:px-3.5 py-0.5 sm:py-1.5 landscape:py-0.5 landscape:px-2 rounded-full bg-red-600/80 hover:bg-red-600 text-white text-xs landscape:text-[11px] font-bold flex items-center gap-1 transition-colors shadow-sm shrink-0"
                 title="Leave Classroom"
               >
                 <X className="w-3.5 h-3.5 shrink-0" />
@@ -1419,56 +1426,37 @@ export function LiveClassroom({
             </div>
           </header>
 
-          {/* MAIN CLASSROOM STAGE: SERENE CLASSROOM WALL WITH SCENIC WINDOW */}
-          <main className="flex-1 w-full relative overflow-hidden flex flex-row p-3 md:p-6 gap-3 md:gap-6 bg-gradient-to-b from-[#182337] via-[#121c2d] to-[#0c1320] min-h-0">
-            {/* ONLY INCLUDE THE WINDOW (All past backgrounds removed) */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
-              {/* Soft, gentle natural daylight glow streaming from the window */}
-              <div className="absolute top-2 left-6 sm:left-14 w-80 sm:w-96 h-80 sm:h-96 bg-gradient-to-br from-amber-300/15 via-sky-300/10 to-transparent rounded-full blur-3xl pointer-events-none" />
-
-              {/* Arched Multi-Pane Classroom Window looking outside to scenic view */}
-              <div className="absolute top-4 left-6 sm:left-14 transition-all">
-                <div className="relative w-40 sm:w-52 h-44 sm:h-56 rounded-t-full border-4 border-amber-100/60 bg-gradient-to-b from-sky-400 via-sky-300 to-amber-100 shadow-[0_0_40px_rgba(56,189,248,0.35),_inset_0_0_25px_rgba(255,255,255,0.7)] overflow-hidden flex flex-col justify-between">
-                  {/* Fluffy drifting morning clouds */}
-                  <div className="absolute top-4 left-4 w-16 h-5 bg-white/80 rounded-full blur-[1px]" />
-                  <div className="absolute top-7 right-4 w-20 h-6 bg-white/70 rounded-full blur-[1px]" />
-                  {/* Gentle warm sun glow in sky */}
-                  <div className="absolute top-3 right-6 w-9 h-9 bg-amber-200/90 rounded-full blur-[2px] shadow-[0_0_15px_rgba(251,191,36,0.8)]" />
-
-                  {/* Serene rolling green hills outside */}
-                  <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 rounded-t-[2.5rem] opacity-95" />
-                  <div className="absolute -bottom-2 -left-3 w-32 h-12 bg-emerald-700/80 rounded-t-full" />
-                  <div className="absolute -bottom-1 right-1 w-28 h-10 bg-emerald-600/90 rounded-t-full" />
-
-                  {/* Window frame mullions / grilles (crossbars) */}
-                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1.5 bg-amber-100/70 shadow-sm" />
-                  <div className="absolute top-1/2 -translate-y-1/2 inset-x-0 h-1.5 bg-amber-100/70 shadow-sm" />
-
-                  {/* Subtle glass reflection highlight angle across panes */}
-                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent pointer-events-none -rotate-12 translate-x-3 scale-125" />
+          {/* Mobile Landscape Tip: Subtle, non-blocking toast, auto-dismisses after 3.4s */}
+          <AnimatePresence>
+            {showLandscapeTip && (
+              <motion.div
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -16, scale: 0.95 }}
+                transition={{ duration: 0.25 }}
+                className="fixed top-12 sm:top-14 inset-x-0 mx-auto max-w-sm px-3 z-[120] pointer-events-none flex justify-center"
+              >
+                <div className="pointer-events-auto bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-cyan-400/70 text-cyan-200 shadow-[0_10px_35px_rgba(0,0,0,0.85)] ring-1 ring-cyan-400/30 backdrop-blur-2xl rounded-full px-3.5 py-1.5 flex items-center gap-2 text-xs font-semibold">
+                  <RotateCcw className="w-3.5 h-3.5 text-cyan-400 shrink-0 animate-spin [animation-duration:3s]" />
+                  <span>Tip: Try landscape mode for a better learning experience!</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLandscapeTip(false)}
+                    className="ml-1 text-slate-400 hover:text-white p-0.5 rounded-full"
+                    title="Dismiss"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-                {/* Wooden windowsill at base of window */}
-                <div className="w-[108%] -ml-[4%] h-3 bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 rounded-full shadow-md border-t border-white/50" />
-              </div>
-            </div>
-
-            {/* Futuristic Advanced 3D AI Teacher Character (Left Column) */}
-            <aside className="relative z-10 w-44 sm:w-52 md:w-60 lg:w-72 shrink-0 h-full flex flex-col items-center justify-end pb-3 select-none">
-              <FuturisticTeacher3D pose={mascotPose} isSpeaking={isSpeaking} analyserRef={analyserRef} />
-              <div className="mt-1 text-center flex flex-col items-center gap-1">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.25)] text-cyan-300">
-                  <span className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-cyan-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`} />
-                  <span className="text-[10px] sm:text-[11px] font-black tracking-wider uppercase">
-                    {isSpeaking ? 'Explaining Lesson' : 'Quantum AI Teacher'}
-                  </span>
-                </div>
-              </div>
-            </aside>
-
-            {/* Large Full-Screen Blackboard (No top tabs, maximum space for learning) */}
-            <section className="relative z-10 flex-1 h-full min-w-0 flex flex-col">
-              <div className="relative flex-1 min-h-0">
+          {/* MAIN CLASSROOM STAGE: 100% MAXIMIZED BLACKBOARD */}
+          <main className="flex-1 w-full relative overflow-hidden flex flex-col p-1 sm:p-2.5 md:p-4 landscape:p-1 bg-slate-950 min-h-0">
+            {/* Full-Screen Blackboard */}
+            <section className="relative z-10 w-full h-full min-w-0 flex-1 flex flex-col min-h-0">
+              <div className="relative flex-1 min-h-0 w-full h-full">
                 {isChalkWiping && (
                   <motion.div 
                     initial={{ x: "-100%" }}
@@ -1476,8 +1464,8 @@ export function LiveClassroom({
                     transition={{ duration: 0.9, ease: "easeInOut" }}
                     className="absolute inset-0 z-50 flex items-center shadow-2xl pointer-events-none"
                   >
-                    <div className="w-24 md:w-32 h-full bg-white/30 blur-2xl" />
-                    <div className="w-[150%] h-full bg-[#1e293b]" />
+                    <div className="w-24 md:w-32 h-full bg-emerald-300/30 blur-2xl" />
+                    <div className="w-[150%] h-full bg-[#0c201a]" />
                   </motion.div>
                 )}
                 {isQuizActive ? (
@@ -1510,19 +1498,19 @@ export function LiveClassroom({
             </section>
           </main>
 
-          {/* DEDICATED LIVE SUBTITLES HUD - AMPLE VERTICAL SPACING PREVENTS ANY COLLISION WITH BOTTOM ACTION BAR */}
-          <div className="w-full flex justify-center px-4 pt-1 sm:pt-2 pb-3.5 sm:pb-4 mb-2 sm:mb-3 z-30 pointer-events-none shrink-0">
+          {/* DEDICATED FLOATING SUBTITLES HUD - Sleek, compact chip that preserves chalkboard space */}
+          <div className="absolute bottom-11 sm:bottom-15 landscape:bottom-10 inset-x-0 mx-auto max-w-sm sm:max-w-xl px-2 z-30 pointer-events-none flex justify-center">
             <AnimatePresence mode="wait">
               {captionLine && (
                 <motion.div 
                   key={captionLine}
-                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                  className="max-w-2xl sm:max-w-3xl pointer-events-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-950/95 backdrop-blur-xl rounded-2xl border border-cyan-500/40 shadow-[0_12px_35px_rgba(0,0,0,0.9)] flex items-center justify-center text-center ring-1 ring-cyan-500/20"
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.18 }}
+                  className="pointer-events-auto px-3 py-1 sm:py-1.5 landscape:py-0.5 bg-slate-950/92 backdrop-blur-xl rounded-full border border-cyan-400/40 shadow-lg ring-1 ring-cyan-500/20 max-w-full"
                 >
-                  <p className="text-xs sm:text-sm font-medium text-white/95 leading-relaxed tracking-wide text-center line-clamp-2">
+                  <p className="text-[11px] sm:text-xs landscape:text-[10px] font-medium text-white/95 leading-snug tracking-wide text-center line-clamp-1 sm:line-clamp-2 px-1">
                     {captionLine}
                   </p>
                 </motion.div>
@@ -1538,7 +1526,7 @@ export function LiveClassroom({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 14, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
-                className="fixed bottom-28 sm:bottom-32 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-slate-900/95 border border-amber-500/60 text-white shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-2xl pointer-events-auto max-w-[92vw]"
+                className="fixed bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-slate-900/95 border border-amber-500/60 text-white shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-2xl pointer-events-auto max-w-[92vw]"
               >
                 <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 shrink-0">
                   <Lock className="w-4 h-4" />
@@ -1573,23 +1561,23 @@ export function LiveClassroom({
             )}
           </AnimatePresence>
 
-          {/* DOCKED BOTTOM CONTROL BAR: Raise Hand, Doubt Box, Slide Navigation, Replay */}
-          <footer className="relative w-full bg-slate-900/95 border-t border-slate-800 backdrop-blur-xl px-3 sm:px-6 py-2 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 z-40 shrink-0 shadow-[0_-10px_35px_rgba(0,0,0,0.5)]">
+          {/* DOCKED BOTTOM CONTROL BAR - FITS IN ONE LINE */}
+          <footer className="relative w-full h-10 sm:h-13 landscape:h-9 bg-slate-900/95 border-t border-slate-800 backdrop-blur-xl px-2 sm:px-3 landscape:px-2 py-1 landscape:py-0.5 flex items-center justify-between gap-1 sm:gap-2 z-40 shrink-0 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] overflow-x-auto scrollbar-none flex-nowrap">
             
             {/* Left Action Buttons: Raise Hand & Replay Voice */}
-            <div className="flex items-center gap-2 md:gap-3 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
               {/* Raise Hand: Voice Doubt input */}
               <button
                 type="button"
                 onClick={handleRaiseHand}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full font-bold text-xs md:text-sm transition-all shadow-lg active:scale-95 ${
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 landscape:py-0.5 rounded-full font-bold text-xs landscape:text-[11px] transition-all shadow-sm active:scale-95 shrink-0 ${
                   isListening
-                    ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse ring-4 ring-amber-500/30'
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse ring-2 ring-amber-500/40'
                     : 'bg-indigo-600 hover:bg-indigo-500 text-white'
                 }`}
                 title="Raise hand to speak your question"
               >
-                {isListening ? <Mic className="w-4 h-4" /> : <Hand className="w-4 h-4" />}
+                {isListening ? <Mic className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <Hand className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
                 <span className="hidden sm:inline">
                   {isListening ? 'Listening...' : 'Raise Hand'}
                 </span>
@@ -1599,15 +1587,15 @@ export function LiveClassroom({
               <button
                 type="button"
                 onClick={handleReplayCurrentSlide}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs md:text-sm font-semibold transition-colors shadow-sm"
-                title="Replay teacher voice for this slide"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 landscape:py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs landscape:text-[11px] font-semibold transition-colors shadow-sm shrink-0"
+                title="Replay voice explanation for this slide"
               >
-                <Volume2 className="w-4 h-4 text-cyan-400" />
-                <span className="hidden sm:inline">Replay</span>
+                <Volume2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
+                <span className="hidden md:inline">Replay</span>
               </button>
             </div>
 
-            {/* Center: Ask Question / Doubt Input Bar (Spans full width on mobile phones to prevent congestion) */}
+            {/* Center: Inline Ask Question / Doubt Input Bar (Spans remaining space smoothly without breaking into multi-line) */}
             <form 
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1617,7 +1605,7 @@ export function LiveClassroom({
                 }
                 submitQuestion(e);
               }} 
-              className="w-full sm:w-auto sm:flex-1 max-w-xl min-w-0 sm:min-w-[220px] order-last sm:order-none relative"
+              className="flex-1 min-w-[90px] max-w-xs sm:max-w-md relative flex items-center mx-1 sm:mx-1.5"
             >
               <input 
                 type="text"
@@ -1648,9 +1636,9 @@ export function LiveClassroom({
                   }
                   setAskText(e.target.value);
                 }}
-                placeholder="Ask any question or doubt about this slide..."
+                placeholder="Ask doubt about slide..."
                 disabled={isAnsweringDoubt}
-                className="w-full bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-full px-5 py-2.5 pr-12 text-xs md:text-sm text-white placeholder-slate-400 focus:outline-none transition-all shadow-inner disabled:opacity-50"
+                className="w-full h-7 sm:h-8 landscape:h-7 bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-full pl-2.5 pr-7 text-xs text-white placeholder-slate-400 focus:outline-none transition-all shadow-inner disabled:opacity-50"
               />
               <button 
                 type="submit" 
@@ -1661,41 +1649,41 @@ export function LiveClassroom({
                   }
                 }}
                 disabled={(!askText.trim() && !(isDemo && !currentUser)) || isAnsweringDoubt}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-full transition-colors cursor-pointer"
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-full transition-colors cursor-pointer shrink-0"
                 title="Send Question"
               >
-                {isAnsweringDoubt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                {isAnsweringDoubt ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
               </button>
             </form>
 
-            {/* Right: Slide Step Navigation */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Right: Slide Step Navigation & CTAs */}
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               {/* Next Slide button: Only shown once current slide narration is completely finished and teacher is NOT speaking */}
               {!isSpeaking && isSlideNarrationComplete && currentStepIndex < timeline.length - 1 && !isQuizActive && (
                 <motion.button
                   type="button"
                   onClick={handleNextStep}
                   animate={{ 
-                    scale: [1, 1.04, 1],
+                    scale: [1, 1.03, 1],
                     boxShadow: [
-                      "0 0 6px rgba(34,211,238,0.4)",
-                      "0 0 20px rgba(34,211,238,0.8)",
-                      "0 0 6px rgba(34,211,238,0.4)"
+                      "0 0 4px rgba(34,211,238,0.4)",
+                      "0 0 14px rgba(34,211,238,0.8)",
+                      "0 0 4px rgba(34,211,238,0.4)"
                     ]
                   }}
                   transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
-                  className="flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-cyan-200 cursor-pointer"
+                  className="flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 landscape:py-0.5 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs landscape:text-[11px] shadow-md ring-1 ring-cyan-200 cursor-pointer shrink-0"
                   title="Advance to next slide"
                 >
-                  <Sparkles className="w-3.5 h-3.5 fill-current text-amber-200" />
-                  <span className="tracking-wide">Next Slide</span>
-                  <ChevronRight className="w-4 h-4 stroke-[3]" />
+                  <Sparkles className="w-3 h-3 fill-current text-amber-200" />
+                  <span className="tracking-wide">Next</span>
+                  <ChevronRight className="w-3.5 h-3.5 stroke-[3]" />
                 </motion.button>
               )}
 
               {/* End of Lesson: Prominent CTAs for Beat the Bot Mini-Game and Lesson Quiz */}
               {!isQuizActive && currentStepIndex >= timeline.length - 1 && !isSpeaking && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                   <motion.button
                     type="button"
                     onClick={() => {
@@ -1705,20 +1693,19 @@ export function LiveClassroom({
                       setIsMiniGameActive(true);
                     }}
                     animate={{ 
-                      scale: [1, 1.04, 1],
+                      scale: [1, 1.03, 1],
                       boxShadow: [
-                        "0 0 10px rgba(245,158,11,0.5)",
-                        "0 0 24px rgba(236,72,153,0.8)",
-                        "0 0 10px rgba(245,158,11,0.5)"
+                        "0 0 8px rgba(245,158,11,0.5)",
+                        "0 0 16px rgba(236,72,153,0.8)",
+                        "0 0 8px rgba(245,158,11,0.5)"
                       ]
                     }}
                     transition={{ repeat: Infinity, duration: 1.3, ease: "easeInOut" }}
-                    className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-amber-400 via-pink-500 to-indigo-500 hover:from-amber-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-amber-300 cursor-pointer"
+                    className="flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 landscape:py-0.5 rounded-full bg-gradient-to-r from-amber-400 via-pink-500 to-indigo-500 hover:from-amber-300 hover:to-indigo-400 text-slate-950 font-black text-xs landscape:text-[11px] shadow-md ring-1 ring-amber-300 cursor-pointer shrink-0"
                     title="Play 60s Beat the Bot rapid-fire trivia to unlock 2 free AI Searches!"
                   >
-                    <Zap className="w-4 h-4 fill-current text-slate-950" />
-                    <span className="tracking-wide">Beat the Bot (60s)</span>
-                    <Sparkles className="w-3.5 h-3.5 fill-current text-slate-950" />
+                    <Zap className="w-3 h-3 fill-current text-slate-950" />
+                    <span className="hidden sm:inline tracking-wide">Beat Bot</span>
                   </motion.button>
 
                   <motion.button
@@ -1730,20 +1717,20 @@ export function LiveClassroom({
                       }
                     }}
                     animate={{ 
-                      scale: [1, 1.05, 1],
+                      scale: [1, 1.04, 1],
                       boxShadow: [
-                        "0 0 10px rgba(34,211,238,0.5)",
-                        "0 0 26px rgba(34,211,238,0.9)",
-                        "0 0 10px rgba(34,211,238,0.5)"
+                        "0 0 8px rgba(34,211,238,0.5)",
+                        "0 0 18px rgba(34,211,238,0.9)",
+                        "0 0 8px rgba(34,211,238,0.5)"
                       ]
                     }}
                     transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                    className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs md:text-sm shadow-xl ring-2 ring-cyan-200 cursor-pointer"
-                    title="Lesson complete! Take 3-5 assessment questions related to this lesson"
+                    className="flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 landscape:py-0.5 rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-slate-950 font-black text-xs landscape:text-[11px] shadow-md ring-1 ring-cyan-200 cursor-pointer shrink-0"
+                    title="Lesson complete! Take assessment questions related to this lesson"
                   >
-                    <Award className="w-4 h-4 fill-current text-indigo-950" />
-                    <span className="tracking-wide">Lesson Quiz ({quizQuestions.length > 0 ? quizQuestions.length : '3–5'} Qs)</span>
-                    <ChevronRight className="w-4 h-4 stroke-[3]" />
+                    <Award className="w-3.5 h-3.5 fill-current text-indigo-950" />
+                    <span className="tracking-wide">Quiz ({quizQuestions.length > 0 ? quizQuestions.length : '3–5'})</span>
+                    <ChevronRight className="w-3.5 h-3.5 stroke-[3]" />
                   </motion.button>
                 </div>
               )}
@@ -1753,27 +1740,27 @@ export function LiveClassroom({
                 <button
                   type="button"
                   onClick={() => setIsQuizActive(false)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs md:text-sm border border-slate-700 shadow-md transition-all active:scale-95"
+                  className="flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 landscape:py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs landscape:text-[11px] border border-slate-700 shadow-sm transition-all active:scale-95 shrink-0"
                   title="Return to review blackboard slides"
                 >
-                  <BookOpen className="w-4 h-4 text-cyan-400" />
-                  <span>Review Slides</span>
+                  <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="hidden sm:inline">Slides</span>
                 </button>
               )}
 
-              {/* Step Counter Pill */}
-              <div className="flex items-center bg-slate-800 rounded-full p-1 border border-slate-700 shadow-sm">
+              {/* Slide Counter Pill */}
+              <div className="flex items-center bg-slate-800 rounded-full p-0.5 border border-slate-700 shadow-sm shrink-0">
                 <button
                   type="button"
                   onClick={handlePrevStep}
                   disabled={currentStepIndex <= 0 || isSpeaking}
-                  className="p-1.5 rounded-full hover:bg-slate-700 disabled:opacity-30 text-white transition-colors"
+                  className="p-1 sm:p-1.5 rounded-full hover:bg-slate-700 disabled:opacity-30 text-white transition-colors"
                   title={isSpeaking ? "Narration in progress..." : "Previous Slide"}
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
-                <span className="text-xs font-bold px-3 text-amber-300">
-                  Slide {currentStepIndex + 1} / {Math.max(1, timeline.length)}
+                <span className="text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 text-amber-300 font-mono whitespace-nowrap">
+                  {currentStepIndex + 1}/{Math.max(1, timeline.length)}
                 </span>
                 <button
                   type="button"
@@ -1788,18 +1775,18 @@ export function LiveClassroom({
                     }
                   }}
                   disabled={isSpeaking}
-                  className={`p-1.5 rounded-full transition-all ${
+                  className={`p-1 sm:p-1.5 rounded-full transition-all ${
                     isSpeaking 
                       ? 'opacity-40 cursor-not-allowed hover:bg-transparent'
                       : currentStepIndex >= timeline.length - 1 && !isQuizActive
-                      ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.9)] animate-pulse ring-2 ring-cyan-200 scale-105'
+                      ? 'bg-cyan-400 text-slate-950 shadow-[0_0_10px_rgba(34,211,238,0.9)] animate-pulse ring-1 ring-cyan-200'
                       : isSlideNarrationComplete && currentStepIndex < timeline.length - 1
-                      ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.9)] ring-2 ring-cyan-200 scale-105'
+                      ? 'bg-cyan-400 text-slate-950 shadow-[0_0_10px_rgba(34,211,238,0.9)] ring-1 ring-cyan-200'
                       : 'hover:bg-slate-700 disabled:opacity-30 text-white'
                   }`}
                   title={isSpeaking ? "Narration in progress..." : (currentStepIndex >= timeline.length - 1 ? "Advance to Lesson Quiz" : "Next Slide")}
                 >
-                  <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                  <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
               </div>
             </div>

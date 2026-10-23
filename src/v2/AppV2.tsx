@@ -4,6 +4,7 @@ import { LandingPage } from './LandingPage';
 import { GeneratingClassroom } from './GeneratingClassroom';
 import { LiveClassroom } from './LiveClassroom';
 import { useAuth } from '../firebase/authContext';
+import { unlockAudio } from './audioManager';
 
 import { photosynthesisLesson } from '../data/sampleLessons/photosynthesis';
 
@@ -103,6 +104,7 @@ export default function AppV2() {
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   const handleGenerate = async (config: any) => {
+    unlockAudio();
     const topicTitle = config.topic?.trim() || (config.uploadedFile ? config.uploadedFile.name.replace(/\.[^/.]+$/, "") : "Interactive Lesson");
     const description = `Class: ${config.classLevel || 'N/A'} | Lang: ${config.language || 'N/A'} | Persona: ${config.persona || 'Friendly Mentor'}`;
     const newLesson = {
@@ -273,6 +275,7 @@ export default function AppV2() {
   };
 
   const handleLoadLesson = (lesson: any) => {
+    unlockAudio();
     // NEVER GENERATE AGAIN WHEN LOADING FROM SAVED CONTENT!
     // Directly extract saved timeline and load straight into live-class
     let timeline = lesson?.timeline || lesson?.data?.timeline || (lesson?.data?.data && lesson?.data?.data?.timeline);
@@ -408,6 +411,7 @@ export default function AppV2() {
   };
 
   const handleEnterLiveClassroom = async () => {
+    unlockAudio();
     try {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen();
