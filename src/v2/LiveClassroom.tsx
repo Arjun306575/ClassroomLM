@@ -135,6 +135,7 @@ interface Blackboard2DProps {
   activeLineIndex?: number;
   revealedCount?: number;
   isVisualDiagramsSelected?: boolean;
+  isStoryteller?: boolean;
 }
 
 const Blackboard2D = ({ 
@@ -147,9 +148,9 @@ const Blackboard2D = ({
   mathEquation,
   activeLineIndex = 0,
   revealedCount,
-  isVisualDiagramsSelected = false
+  isVisualDiagramsSelected = false,
+  isStoryteller = false
 }: Blackboard2DProps) => {
-  // Guarantee ALL bullet points are displayed without missing content or premature cutoff
   const visibleBullets = bullets;
   const [isZoomed, setIsZoomed] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -159,52 +160,86 @@ const Blackboard2D = ({
   }, [image]);
 
   const displayImage = imgError ? null : image;
-  const shouldShowImage = isVisualDiagramsSelected && Boolean(displayImage);
+  // In Storyteller mode, images are ALWAYS shown across the board
+  const shouldShowImage = (isStoryteller || isVisualDiagramsSelected) && Boolean(displayImage);
 
   return (
-    <div className="w-full h-full bg-gradient-to-br from-[#0c201a] via-[#091a15] to-[#061410] border-2 sm:border-[6px] md:border-[8px] border-[#1d2d25] ring-1 ring-emerald-500/20 rounded-xl sm:rounded-2xl landscape:border-2 landscape:rounded-lg shadow-[inset_0_0_70px_rgba(0,0,0,0.85),_0_15px_35px_rgba(0,0,0,0.6)] relative overflow-hidden flex flex-col p-2 sm:p-3.5 md:p-5 landscape:p-1.5 select-text">
-      {/* Blackboard chalk grain texture */}
-      <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:18px_18px]" />
+    <div className={`w-full h-full ${
+      isStoryteller
+        ? 'bg-gradient-to-br from-[#1d0e33] via-[#120726] to-[#0a0316] border-2 sm:border-[6px] md:border-[8px] border-[#3e1d6e] ring-1 ring-purple-400/40 rounded-xl sm:rounded-2xl landscape:border-2 landscape:rounded-lg shadow-[inset_0_0_80px_rgba(40,12,70,0.85),_0_15px_40px_rgba(0,0,0,0.7)]'
+        : 'bg-gradient-to-br from-[#0c201a] via-[#091a15] to-[#061410] border-2 sm:border-[6px] md:border-[8px] border-[#1d2d25] ring-1 ring-emerald-500/20 rounded-xl sm:rounded-2xl landscape:border-2 landscape:rounded-lg shadow-[inset_0_0_70px_rgba(0,0,0,0.85),_0_15px_35px_rgba(0,0,0,0.6)]'
+    } relative overflow-hidden flex flex-col p-2 sm:p-3.5 md:p-5 landscape:p-1.5 select-text`}>
+      {/* Background stardust or chalk grain texture */}
+      {isStoryteller ? (
+        <div className="absolute inset-0 opacity-[0.16] pointer-events-none bg-[radial-gradient(#f3e8ff_1px,transparent_1px)] [background-size:22px_22px]" />
+      ) : (
+        <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:18px_18px]" />
+      )}
       
-      {/* Chalk tray at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-1.5 sm:h-2.5 landscape:h-1.5 bg-[#17251e] border-t border-[#23382d] flex items-center px-4 sm:px-8 gap-2.5 sm:gap-4 z-20">
-        <div className="w-6 sm:w-10 h-1 bg-white/90 rounded-full shadow-sm" />
-        <div className="w-5 sm:w-7 h-1 bg-amber-200/90 rounded-full shadow-sm" />
-        <div className="w-6 sm:w-8 h-1 bg-emerald-200/90 rounded-full shadow-sm" />
-        <div className="w-5 sm:w-7 h-1 bg-cyan-200/90 rounded-full shadow-sm" />
+      {/* Tray at bottom: Enchanted Crystal Runes for Storyteller mode, or chalk sticks */}
+      <div className={`absolute bottom-0 left-0 right-0 h-1.5 sm:h-2.5 landscape:h-1.5 ${
+        isStoryteller ? 'bg-[#261343] border-t border-[#4c2482]' : 'bg-[#17251e] border-t border-[#23382d]'
+      } flex items-center px-4 sm:px-8 gap-2.5 sm:gap-4 z-20`}>
+        {isStoryteller ? (
+          <>
+            <div className="w-5 sm:w-8 h-1 bg-amber-400 rounded-full shadow-[0_0_6px_rgba(251,191,36,0.8)]" title="Golden Story Quill" />
+            <div className="w-6 sm:w-10 h-1 bg-purple-400 rounded-full shadow-[0_0_6px_rgba(192,132,252,0.8)]" title="Amethyst Rune" />
+            <div className="w-5 sm:w-7 h-1 bg-rose-400 rounded-full shadow-[0_0_6px_rgba(251,113,133,0.8)]" title="Ruby Spark" />
+            <div className="w-6 sm:w-9 h-1 bg-cyan-300 rounded-full shadow-[0_0_6px_rgba(103,232,249,0.8)]" title="Starlight Crystal" />
+          </>
+        ) : (
+          <>
+            <div className="w-6 sm:w-10 h-1 bg-white/90 rounded-full shadow-sm" />
+            <div className="w-5 sm:w-7 h-1 bg-amber-200/90 rounded-full shadow-sm" />
+            <div className="w-6 sm:w-8 h-1 bg-emerald-200/90 rounded-full shadow-sm" />
+            <div className="w-5 sm:w-7 h-1 bg-cyan-200/90 rounded-full shadow-sm" />
+          </>
+        )}
       </div>
 
       <div className="relative z-10 w-full h-full flex flex-col min-h-0">
-        {/* Title & Math Equation header: Fits in single row to maximize blackboard height */}
+        {/* Title & Header: In Storyteller mode, show a golden story badge and strictly ZERO math formulas */}
         {heading && (
-          <div className="border-b border-emerald-500/20 pb-1 sm:pb-1.5 landscape:pb-0.5 mb-1 sm:mb-1.5 landscape:mb-1 shrink-0 flex flex-row items-center justify-between gap-1.5 sm:gap-2 flex-nowrap">
-            <motion.div 
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              key={heading}
-              className="text-xs sm:text-base md:text-xl landscape:text-xs font-black text-white font-sans tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)] truncate max-w-[55%] landscape:max-w-[50%]"
-              title={typeof heading === 'string' ? heading : undefined}
-            >
-              <Markdown
-                remarkPlugins={[remarkMath, remarkGfm]}
-                rehypePlugins={[rehypeKatex]}
-                components={{
-                  p({ children }) { return <span className="inline font-sans truncate">{children}</span>; }
-                }}
+          <div className={`border-b ${
+            isStoryteller ? 'border-purple-500/30' : 'border-emerald-500/20'
+          } pb-1 sm:pb-1.5 landscape:pb-0.5 mb-1 sm:mb-1.5 landscape:mb-1 shrink-0 flex flex-row items-center justify-between gap-1.5 sm:gap-2 flex-nowrap`}>
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              {isStoryteller && (
+                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40 shadow-sm animate-pulse">
+                  📖 Story Adventure
+                </span>
+              )}
+              <motion.div 
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={heading}
+                className={`text-xs sm:text-base md:text-xl landscape:text-xs font-black ${
+                  isStoryteller ? 'text-amber-100 font-serif' : 'text-white font-sans'
+                } tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)] truncate max-w-[65%] landscape:max-w-[60%]'`}
+                title={typeof heading === 'string' ? heading : undefined}
               >
-                {heading}
-              </Markdown>
-            </motion.div>
-            {mathEquation && (
+                <Markdown
+                  remarkPlugins={[remarkMath, remarkGfm]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={{
+                    p({ children }) { return <span className="inline truncate">{children}</span>; }
+                  }}
+                >
+                  {heading}
+                </Markdown>
+              </motion.div>
+            </div>
+            {/* STRICT RULE: Zero formulas in Storyteller mode! */}
+            {!isStoryteller && mathEquation && (
               <ChalkboardEquationSpan equation={mathEquation} />
             )}
           </div>
         )}
 
-        {/* Content Area */}
+        {/* Content Area: Side-by-side on desktop/landscape with zero overlap */}
         <div className="flex-1 flex flex-col md:flex-row gap-2 md:gap-4 min-h-0">
-          {/* Bullets List - Neat, understandable, highly legible modern educational font */}
-          <div className={`flex-1 flex flex-col justify-start gap-1 sm:gap-1.5 landscape:gap-1 overflow-y-auto pr-1 sm:pr-2 pb-14 sm:pb-16 landscape:pb-12 custom-chalk-scrollbar ${shouldShowImage ? '' : 'w-full'}`}>
+          {/* Bullets / Story beats list */}
+          <div className={`flex-1 flex flex-col justify-start gap-1 sm:gap-1.5 landscape:gap-1 overflow-y-auto pr-1 sm:pr-2 pb-16 sm:pb-20 landscape:pb-14 custom-chalk-scrollbar ${shouldShowImage ? 'w-full md:w-7/12' : 'w-full'}`}>
             <AnimatePresence mode="popLayout">
               {visibleBullets.map((b: string, i: number) => {
                 const isActive = activeLineIndex === -1 ? false : i === activeLineIndex;
@@ -214,18 +249,26 @@ const Blackboard2D = ({
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className={`text-xs sm:text-sm md:text-base landscape:text-[11px] sm:landscape:text-xs font-sans font-medium flex items-start gap-1.5 sm:gap-2 leading-relaxed landscape:leading-snug rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 landscape:py-0.5 landscape:px-2 transition-all ${
-                      isActive 
-                        ? 'bg-emerald-950/70 text-emerald-100 shadow-md border border-emerald-400/50' 
-                        : 'text-slate-100 hover:bg-white/5 border border-transparent'
+                    className={`text-xs sm:text-sm md:text-base landscape:text-[11px] sm:landscape:text-xs font-medium flex items-start gap-1.5 sm:gap-2 leading-relaxed landscape:leading-snug rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 landscape:py-0.5 landscape:px-2 transition-all ${
+                      isStoryteller
+                        ? (isActive 
+                            ? 'bg-purple-900/80 text-amber-50 shadow-lg border border-amber-400/60 ring-1 ring-amber-400/30' 
+                            : 'bg-purple-950/40 text-purple-100 hover:bg-purple-900/40 border border-purple-500/20')
+                        : (isActive 
+                            ? 'bg-emerald-950/70 text-emerald-100 shadow-md border border-emerald-400/50' 
+                            : 'text-slate-100 hover:bg-white/5 border border-transparent')
                     }`}
                   >
-                    <span className={`mt-0.5 shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
-                      isActive 
-                        ? 'bg-emerald-400 text-slate-950 shadow-[0_0_8px_rgba(52,211,153,0.8)] scale-105' 
-                        : 'bg-emerald-950/80 text-amber-300 border border-amber-500/30'
+                    <span className={`mt-0.5 shrink-0 inline-flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 rounded-full text-[10px] sm:text-xs font-bold transition-all ${
+                      isStoryteller
+                        ? (isActive 
+                            ? 'bg-amber-400 text-slate-950 shadow-[0_0_10px_rgba(251,191,36,0.9)] scale-110' 
+                            : 'bg-purple-900/90 text-amber-300 border border-amber-400/30')
+                        : (isActive 
+                            ? 'bg-emerald-400 text-slate-950 shadow-[0_0_8px_rgba(52,211,153,0.8)] scale-105' 
+                            : 'bg-emerald-950/80 text-amber-300 border border-amber-500/30')
                     }`}>
-                      ✦
+                      {isStoryteller ? (['✨', '🌟', '⚔️', '🧭', '💎', '🎉'][i % 6]) : '✦'}
                     </span>
                     <div className="flex-1 chalk-markdown tracking-normal font-sans">
                       <Markdown
@@ -233,18 +276,18 @@ const Blackboard2D = ({
                         rehypePlugins={[rehypeKatex]}
                         components={{
                           p({ children }) {
-                            return <p className="inline m-0 font-sans">{children}</p>;
+                            return <p className="inline m-0">{children}</p>;
                           },
                           strong({ children }) {
-                            return <strong className="font-bold text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{children}</strong>;
+                            return <strong className={isStoryteller ? "font-bold text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" : "font-bold text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]"}>{children}</strong>;
                           },
                           em({ children }) {
-                            return <em className="italic text-cyan-200">{children}</em>;
+                            return <em className={isStoryteller ? "italic text-pink-300" : "italic text-cyan-200"}>{children}</em>;
                           },
                           code(props) {
                             const { children } = props as any;
                             return (
-                              <code className="font-mono bg-emerald-950/90 text-yellow-300 px-1.5 py-0.5 rounded border border-yellow-500/30 text-xs sm:text-sm">
+                              <code className={`${isStoryteller ? 'bg-purple-950/90 text-amber-300 border-amber-500/30' : 'bg-emerald-950/90 text-yellow-300 border-yellow-500/30'} font-mono px-1.5 py-0.5 rounded border text-xs sm:text-sm`}>
                                 {children}
                               </code>
                             );
@@ -260,49 +303,57 @@ const Blackboard2D = ({
             </AnimatePresence>
             {visibleBullets.length === 0 && (
               <div className="text-slate-400 font-sans text-xs sm:text-base italic mt-4">
-                Preparing chalkboard notes...
+                {isStoryteller ? "Opening the grand storybook..." : "Preparing chalkboard notes..."}
               </div>
             )}
           </div>
 
-          {/* Related Diagram / Image Panel (ONLY shown if Visual Diagrams is selected in focus areas) */}
+          {/* Picture Panel: ALWAYS clearly visible in Storyteller mode, with zero overlapping components */}
           {shouldShowImage && displayImage && (
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
-              className="w-full md:w-5/12 h-56 md:h-full flex flex-col items-center justify-center p-2 shrink-0 relative group"
+              transition={{ duration: 0.45 }}
+              className="w-full md:w-5/12 h-52 sm:h-64 md:h-full flex flex-col items-center justify-center p-1 sm:p-2 shrink-0 relative group min-h-0"
             >
-              <div className="relative w-full h-full flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-white/20 p-2 overflow-hidden shadow-2xl">
-                <img 
-                  src={displayImage} 
-                  onError={() => setImgError(true)}
-                  onClick={() => setIsZoomed(true)}
-                  className="max-w-full max-h-[82%] rounded-lg object-contain cursor-zoom-in hover:brightness-105 transition-all" 
-                  alt={imageCaption || "Chalkboard lesson illustration"} 
-                  title="Click to view full-resolution visual"
-                />
-                <div className="mt-2 w-full flex items-center justify-between gap-2 px-1">
-                  <span className="text-[11px] md:text-xs text-amber-300/90 font-sans font-medium truncate">
-                    {imageCaption || (diagramType && diagramType !== 'none' ? `Visual Diagram: ${diagramType}` : "Visual Diagram")}
+              <div className={`relative w-full h-full flex flex-col items-center justify-center ${
+                isStoryteller 
+                  ? 'bg-purple-950/70 border-2 border-amber-400/40 shadow-[0_8px_30px_rgba(0,0,0,0.8)]' 
+                  : 'bg-slate-950/60 border border-white/20 shadow-2xl'
+              } rounded-xl p-1.5 sm:p-2 overflow-hidden`}>
+                <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden rounded-lg">
+                  <img 
+                    src={displayImage} 
+                    onError={() => setImgError(true)}
+                    onClick={() => setIsZoomed(true)}
+                    className="w-full h-full object-cover rounded-lg cursor-zoom-in hover:brightness-105 transition-all shadow-inner" 
+                    alt={imageCaption || (isStoryteller ? "Storybook adventure illustration" : "Chalkboard lesson illustration")} 
+                    title="Click to view full-resolution visual"
+                  />
+                  {isStoryteller && (
+                    <div className="absolute top-1.5 left-1.5 px-2 py-0.5 bg-black/70 backdrop-blur-md rounded-full border border-amber-400/50 text-[10px] text-amber-300 font-bold flex items-center gap-1 shadow-md">
+                      ✨ Story Scene
+                    </div>
+                  )}
+                </div>
+                <div className="mt-1.5 w-full flex items-center justify-between gap-2 px-1 shrink-0">
+                  <span className={`text-[10px] sm:text-xs ${
+                    isStoryteller ? 'text-amber-200 font-serif' : 'text-amber-300/90 font-sans'
+                  } font-medium truncate flex-1`}>
+                    {imageCaption || (isStoryteller ? "Storybook Scene" : (diagramType && diagramType !== 'none' ? `Visual Diagram: ${diagramType}` : "Visual Diagram"))}
                   </span>
                   <button 
                     type="button"
                     onClick={() => setIsZoomed(true)}
-                    className="text-[10px] text-cyan-300 hover:text-white bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700 shrink-0 font-mono"
+                    className={`text-[9px] sm:text-[10px] ${
+                      isStoryteller 
+                        ? 'text-amber-300 hover:text-white bg-purple-900/90 hover:bg-purple-800 border-purple-500/50' 
+                        : 'text-cyan-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border-slate-700'
+                    } px-2 py-0.5 rounded border shrink-0 font-sans`}
                   >
                     Zoom
                   </button>
                 </div>
-                {diagramLabels && diagramLabels.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1 max-w-full overflow-hidden">
-                    {diagramLabels.slice(0, 3).map((lbl, idx) => (
-                      <span key={idx} className="text-[9px] bg-indigo-950/70 text-indigo-300 border border-indigo-700/40 px-1.5 py-0.5 rounded font-mono truncate max-w-[100px]">
-                        {lbl}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Fullscreen Zoom Lightbox Modal */}
@@ -313,15 +364,19 @@ const Blackboard2D = ({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     onClick={() => setIsZoomed(false)}
-                    className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-zoom-out"
+                    className="fixed inset-0 z-[200] bg-black/92 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-zoom-out"
                   >
                     <div className="relative max-w-4xl max-h-[85vh] flex flex-col items-center">
                       <img 
                         src={displayImage} 
-                        className="max-w-full max-h-[80vh] object-contain rounded-2xl border-2 border-white/30 shadow-2xl" 
-                        alt={imageCaption || "Enlarged chalkboard image"}
+                        className={`max-w-full max-h-[80vh] object-contain rounded-2xl border-2 ${
+                          isStoryteller ? 'border-amber-400/60 shadow-[0_0_50px_rgba(251,191,36,0.3)]' : 'border-white/30 shadow-2xl'
+                        }`} 
+                        alt={imageCaption || "Enlarged visual"}
                       />
-                      <p className="mt-3 text-sm md:text-base text-white/90 font-sans font-medium text-center">
+                      <p className={`mt-3 text-sm md:text-base ${
+                        isStoryteller ? 'text-amber-200 font-serif' : 'text-white/90 font-sans'
+                      } font-medium text-center`}>
                         {imageCaption || heading}
                       </p>
                       <button 
@@ -420,6 +475,15 @@ export function LiveClassroom({
   const focusList = Array.isArray(focusAreas) ? focusAreas : (focusAreas ? [focusAreas] : []);
   const isVisualDiagramsSelected = focusList.some((f: string) => 
     f.toLowerCase().includes("visual") || f.toLowerCase().includes("diagram")
+  );
+
+  const currentPersona = lessonData?.config?.persona || lessonData?.data?.config?.persona || '';
+  const isStoryteller = Boolean(
+    typeof currentPersona === 'string' && (
+      currentPersona.toLowerCase().includes("story") ||
+      currentPersona.toLowerCase().includes("storyteller") ||
+      currentPersona.toLowerCase().includes("story teller")
+    )
   );
 
   // Fullscreen tracking
@@ -1492,6 +1556,7 @@ export function LiveClassroom({
                     activeLineIndex={activeBulletIndex}
                     revealedCount={revealedBulletCount}
                     isVisualDiagramsSelected={isVisualDiagramsSelected}
+                    isStoryteller={isStoryteller}
                   />
                 )}
               </div>
@@ -1508,9 +1573,15 @@ export function LiveClassroom({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -4, scale: 0.98 }}
                   transition={{ duration: 0.18 }}
-                  className="pointer-events-auto px-3 py-1 sm:py-1.5 landscape:py-0.5 bg-slate-950/92 backdrop-blur-xl rounded-full border border-cyan-400/40 shadow-lg ring-1 ring-cyan-500/20 max-w-full"
+                  className={`pointer-events-auto px-3 py-1 sm:py-1.5 landscape:py-0.5 ${
+                    isStoryteller 
+                      ? 'bg-purple-950/95 border-amber-400/50 shadow-[0_4px_20px_rgba(0,0,0,0.8)] ring-1 ring-amber-400/30' 
+                      : 'bg-slate-950/92 border-cyan-400/40 shadow-lg ring-1 ring-cyan-500/20'
+                  } backdrop-blur-xl rounded-full border max-w-full`}
                 >
-                  <p className="text-[11px] sm:text-xs landscape:text-[10px] font-medium text-white/95 leading-snug tracking-wide text-center line-clamp-1 sm:line-clamp-2 px-1">
+                  <p className={`text-[11px] sm:text-xs landscape:text-[10px] font-medium ${
+                    isStoryteller ? 'text-amber-100 font-serif' : 'text-white/95 font-sans'
+                  } leading-snug tracking-wide text-center line-clamp-1 sm:line-clamp-2 px-1`}>
                     {captionLine}
                   </p>
                 </motion.div>
@@ -1636,7 +1707,7 @@ export function LiveClassroom({
                   }
                   setAskText(e.target.value);
                 }}
-                placeholder="Ask doubt about slide..."
+                placeholder={isStoryteller ? "Ask about the story or characters..." : "Ask doubt about slide..."}
                 disabled={isAnsweringDoubt}
                 className="w-full h-7 sm:h-8 landscape:h-7 bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-full pl-2.5 pr-7 text-xs text-white placeholder-slate-400 focus:outline-none transition-all shadow-inner disabled:opacity-50"
               />

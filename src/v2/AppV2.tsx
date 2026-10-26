@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { LandingPage } from './LandingPage';
 import { GeneratingClassroom } from './GeneratingClassroom';
 import { LiveClassroom } from './LiveClassroom';
-import { useAuth } from '../firebase/authContext';
+import { useAuth, getUserSavedStorageKey } from '../firebase/authContext';
 import { unlockAudio } from './audioManager';
 
 import { photosynthesisLesson } from '../data/sampleLessons/photosynthesis';
@@ -17,11 +17,9 @@ export default function AppV2() {
   const [savedLessons, setSavedLessons] = useState<any[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('classroomlm_saved_lessons');
-        return stored ? JSON.parse(stored) : [];
-      } catch (e) {
-        return [];
-      }
+        // Wipe legacy shared unpartitioned key to eliminate cross-user data bleeding
+        localStorage.removeItem('classroomlm_saved_lessons');
+      } catch (e) {}
     }
     return [];
   });
@@ -32,7 +30,20 @@ export default function AppV2() {
     return true;
   });
 
-  // Combine Firestore cloud items and local cache with strict deduplication
+  // Strictly reload user-scoped saved lessons whenever active user changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const key = getUserSavedStorageKey(currentUser?.uid);
+        const stored = localStorage.getItem(key);
+        setSavedLessons(stored ? JSON.parse(stored) : []);
+      } catch (e) {
+        setSavedLessons([]);
+      }
+    }
+  }, [currentUser?.uid]);
+
+  // Combine Firestore cloud items and user-scoped local cache with strict deduplication
   const combinedSavedLessons = useMemo(() => {
     const firestoreMapped = currentUser ? firestoreSavedItems.map(item => {
       let parsedData = item.data;
@@ -60,8 +71,10 @@ export default function AppV2() {
       };
     }) : [];
 
-    // Combine both Firestore items and local items to guarantee all saved content is immediately accessible
-    const merged = [...firestoreMapped, ...(savedLessons || [])];
+    // Strictly user-isolated items: only combine Firestore items with local items belonging to THIS user
+    const merged = currentUser 
+      ? [...firestoreMapped, ...(savedLessons || [])]
+      : [...(savedLessons || [])];
 
     // Deduplicate items so nothing ever shows twice
     const seen = new Set<string>();
@@ -79,10 +92,11 @@ export default function AppV2() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(savedLessons));
+        const key = getUserSavedStorageKey(currentUser?.uid);
+        localStorage.setItem(key, JSON.stringify(savedLessons));
       } catch (e) {}
     }
-  }, [savedLessons]);
+  }, [savedLessons, currentUser?.uid]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -131,7 +145,9 @@ export default function AppV2() {
       const filtered = prev.filter(l => l.id !== newLesson.id && (l.title || '').trim().toLowerCase() !== topicTitle.trim().toLowerCase());
       const updated = [newLesson, ...filtered];
       try {
-        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+        const storageKey = getUserSavedStorageKey(currentUser?.uid);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        localStorage.removeItem('classroomlm_saved_lessons');
       } catch (e) {}
       return updated;
     });
@@ -173,7 +189,9 @@ export default function AppV2() {
       const filtered = prev.filter(l => l.id !== fullLesson.id && (l.title || '').trim().toLowerCase() !== topic.trim().toLowerCase());
       const updated = [fullLesson, ...filtered];
       try {
-        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+        const storageKey = getUserSavedStorageKey(currentUser?.uid);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        localStorage.removeItem('classroomlm_saved_lessons');
       } catch (e) {}
       return updated;
     });
@@ -214,7 +232,9 @@ export default function AppV2() {
       const filtered = prev.filter(item => !(item.isMagicLens && (item.title || '').trim().toLowerCase() === title.trim().toLowerCase()));
       const updated = [newLensItem, ...filtered];
       try {
-        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+        const storageKey = getUserSavedStorageKey(currentUser?.uid);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        localStorage.removeItem('classroomlm_saved_lessons');
       } catch (e) {}
       return updated;
     });
@@ -254,7 +274,9 @@ export default function AppV2() {
       const filtered = prev.filter(item => !(item.isAISearch && (item.title || '').trim().toLowerCase() === title.trim().toLowerCase()));
       const updated = [newSearchItem, ...filtered];
       try {
-        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(updated));
+        const storageKey = getUserSavedStorageKey(currentUser?.uid);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        localStorage.removeItem('classroomlm_saved_lessons');
       } catch (e) {}
       return updated;
     });
@@ -283,76 +305,172 @@ export default function AppV2() {
       try { timeline = JSON.parse(timeline); } catch (e) {}
     }
 
+    const persona = lesson?.config?.persona || lesson?.data?.config?.persona || '';
+    const isSavedStoryteller = Boolean(
+      typeof persona === 'string' && (
+        persona.toLowerCase().includes("story") ||
+        persona.toLowerCase().includes("storyteller") ||
+        persona.toLowerCase().includes("story teller")
+      )
+    );
+
     // If timeline is still missing or empty, synthesize complete lesson slides instantly from saved metadata (0ms, no AI API calls)
     if (!Array.isArray(timeline) || timeline.length === 0) {
-      const topic = lesson?.title || lesson?.config?.topic || "Saved Lesson";
-      const classLevel = lesson?.config?.classLevel || "Class 10";
-      timeline = [
-        {
-          timestamp: "Slide 1: Foundations & Overview",
-          teacherGesture: "happy",
-          spokenDialogue: `Welcome back to our study of ${topic}. Let us review the core principles and foundations together.`,
-          bubbleCaption: `Core Foundations of ${topic}`,
-          whiteboardContent: {
-            heading: `${topic}: Core Foundations`,
-            bulletPoints: [
-              `Fundamental definition and core context of ${topic}`,
-              "Primary principles and essential operational components",
-              "Why mastering this foundation is key to advanced problem solving"
-            ],
-            diagramType: "concept_map",
-            imageCaption: `Foundations of ${topic}`
+      const topic = lesson?.title || lesson?.config?.topic || "Saved Adventure";
+      if (isSavedStoryteller) {
+        timeline = [
+          {
+            timestamp: "Chapter 1: The Call to Adventure",
+            teacherGesture: "thinking",
+            spokenDialogue: `Welcome back, fellow adventurer! The tale of ${topic} awaits our discovery once more.`,
+            bubbleCaption: `Chapter 1: The Call of ${topic}`,
+            whiteboardContent: {
+              heading: `📖 Chapter 1: The Call of ${topic}`,
+              bulletPoints: [
+                `🌟 An ancient mystery stirred in the quiet valley of ${topic}`,
+                "🧭 Pip and Barnaby prepared their lanterns and compass",
+                "✨ 'Every great quest begins with a single brave step!' cheered Pip"
+              ],
+              diagramType: "none",
+              imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`storybook adventure illustration of chapter 1, ${topic}, fantasy digital art, glowing starlight, no text`)}?width=800&height=600&nologo=true`,
+              imageCaption: `The companions begin the quest of ${topic}`
+            }
+          },
+          {
+            timestamp: "Chapter 2: The Whispering Path",
+            teacherGesture: "explaining",
+            spokenDialogue: `Stepping along the luminous cobblestones, the companions uncovered secrets hidden in the forest.`,
+            bubbleCaption: `Chapter 2: Down the Whispering Path`,
+            whiteboardContent: {
+              heading: `⚔️ Chapter 2: The Whispering Path`,
+              bulletPoints: [
+                "🌲 Ancient willow trees whispered forgotten lore",
+                "🦊 Lady Seraphina guided the way with her bronze spyglass",
+                "💫 Sparkling runes pointed across the crystal stream"
+              ],
+              diagramType: "none",
+              imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`fantasy companions walking through glowing enchanted forest chapter 2 ${topic}, whimsical animation style, no text`)}?width=800&height=600&nologo=true`,
+              imageCaption: `Journey along the Whispering Path`
+            }
+          },
+          {
+            timestamp: "Chapter 3: The Secret Chamber",
+            teacherGesture: "pointing_whiteboard",
+            spokenDialogue: `At the highest ridge stood the secret chamber where the wonder of ${topic} was revealed!`,
+            bubbleCaption: `Chapter 3: The Secret Chamber`,
+            whiteboardContent: {
+              heading: `💎 Chapter 3: The Secret Chamber`,
+              bulletPoints: [
+                `🌟 The hidden chamber radiated with warmth and wonder`,
+                "📜 The ancient riddles unraveled before their eyes",
+                "🤝 Courage and friendship proved to be the ultimate key"
+              ],
+              diagramType: "none",
+              imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`magical secret crystal chamber sanctuary glowing light chapter 3 ${topic}, fairy tale digital painting, no text`)}?width=800&height=600&nologo=true`,
+              imageCaption: `The Secret Chamber is unsealed`
+            }
+          },
+          {
+            timestamp: "Chapter 4: The Grand Feast",
+            teacherGesture: "celebrating",
+            spokenDialogue: `Under a sky of bursting fireworks and joyful songs, the quest was celebrated far and wide!`,
+            bubbleCaption: `Chapter 4: The Grand Feast`,
+            whiteboardContent: {
+              heading: `🎉 Chapter 4: The Grand Feast`,
+              bulletPoints: [
+                "🎆 Festive lanterns and starry banners filled the air",
+                "🎶 Music and laughter echoed across the kingdom",
+                "⭐ A glorious adventure never to be forgotten!"
+              ],
+              diagramType: "none",
+              imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`fantasy festival celebration lanterns fireworks chapter 4 ${topic}, colorful fairy tale art, no text`)}?width=800&height=600&nologo=true`,
+              imageCaption: `Celebration of the grand adventure`
+            }
           }
-        },
-        {
-          timestamp: "Slide 2: Step-by-Step Mechanisms",
-          teacherGesture: "explaining",
-          spokenDialogue: `Now, let us examine the governing mechanism and step-by-step breakdown of ${topic}.`,
-          bubbleCaption: `Key Mechanisms of ${topic}`,
-          whiteboardContent: {
-            heading: "Mechanisms & Key Formulas",
-            bulletPoints: [
-              "Governing equations and transformation rules",
-              "Critical state changes and interaction dynamics",
-              "High-yield takeaways and distinctions to remember"
-            ],
-            diagramType: "process_flow",
-            mathEquation: "$$\\Delta E = mc^2 \\quad \\text{or} \\quad F = ma$$",
-            imageCaption: `Mechanisms of ${topic}`
+        ];
+      } else {
+        timeline = [
+          {
+            timestamp: "Slide 1: Foundations & Overview",
+            teacherGesture: "happy",
+            spokenDialogue: `Welcome back to our study of ${topic}. Let us review the core principles and foundations together.`,
+            bubbleCaption: `Core Foundations of ${topic}`,
+            whiteboardContent: {
+              heading: `${topic}: Core Foundations`,
+              bulletPoints: [
+                `Fundamental definition and core context of ${topic}`,
+                "Primary principles and essential operational components",
+                "Why mastering this foundation is key to advanced problem solving"
+              ],
+              diagramType: "concept_map",
+              imageCaption: `Foundations of ${topic}`
+            }
+          },
+          {
+            timestamp: "Slide 2: Step-by-Step Mechanisms",
+            teacherGesture: "explaining",
+            spokenDialogue: `Now, let us examine the governing mechanism and step-by-step breakdown of ${topic}.`,
+            bubbleCaption: `Key Mechanisms of ${topic}`,
+            whiteboardContent: {
+              heading: "Mechanisms & Key Formulas",
+              bulletPoints: [
+                "Governing equations and transformation rules",
+                "Critical state changes and interaction dynamics",
+                "High-yield takeaways and distinctions to remember"
+              ],
+              diagramType: "process_flow",
+              mathEquation: "$$\\Delta E = mc^2 \\quad \\text{or} \\quad F = ma$$",
+              imageCaption: `Mechanisms of ${topic}`
+            }
+          },
+          {
+            timestamp: "Slide 3: Real-World Applications",
+            teacherGesture: "celebrating",
+            spokenDialogue: `Notice how this concept applies in modern engineering, nature, and everyday breakthroughs.`,
+            bubbleCaption: `Applications of ${topic}`,
+            whiteboardContent: {
+              heading: "Practical Applications & Cases",
+              bulletPoints: [
+                "Real-world modern applications and industrial use",
+                "Everyday phenomena explained by this core mechanism",
+                "Experimental case studies and demonstrations"
+              ],
+              diagramType: "comparison_table",
+              imageCaption: `Applications of ${topic}`
+            }
+          },
+          {
+            timestamp: "Slide 4: Key Summary & Mastery",
+            teacherGesture: "celebrating",
+            spokenDialogue: `To wrap up our review, keep these golden rules and exam takeaways top of mind!`,
+            bubbleCaption: `Mastery Summary for ${topic}`,
+            whiteboardContent: {
+              heading: "Mastery Summary & Pro-Tips",
+              bulletPoints: [
+                "Always verify core assumptions and definitions first",
+                "Distinguish root causes from surface symptoms",
+                "Review the problem-solving steps carefully"
+              ],
+              diagramType: "none"
+            }
           }
-        },
-        {
-          timestamp: "Slide 3: Real-World Applications",
-          teacherGesture: "celebrating",
-          spokenDialogue: `Notice how this concept applies in modern engineering, nature, and everyday breakthroughs.`,
-          bubbleCaption: `Applications of ${topic}`,
-          whiteboardContent: {
-            heading: "Practical Applications & Cases",
-            bulletPoints: [
-              "Real-world modern applications and industrial use",
-              "Everyday phenomena explained by this core mechanism",
-              "Experimental case studies and demonstrations"
-            ],
-            diagramType: "comparison_table",
-            imageCaption: `Applications of ${topic}`
-          }
-        },
-        {
-          timestamp: "Slide 4: Key Summary & Mastery",
-          teacherGesture: "celebrating",
-          spokenDialogue: `To wrap up our review, keep these golden rules and exam takeaways top of mind!`,
-          bubbleCaption: `Mastery Summary for ${topic}`,
-          whiteboardContent: {
-            heading: "Mastery Summary & Pro-Tips",
-            bulletPoints: [
-              "Always verify core assumptions and definitions first",
-              "Distinguish root causes from surface symptoms",
-              "Review the problem-solving steps carefully"
-            ],
-            diagramType: "none"
-          }
+        ];
+      }
+    } else if (isSavedStoryteller) {
+      // Guarantee zero math formulas in loaded story lessons
+      timeline = timeline.map((step: any) => {
+        if (step.whiteboardContent) {
+          const { mathEquation, ...rest } = step.whiteboardContent;
+          return {
+            ...step,
+            whiteboardContent: {
+              ...rest,
+              mathEquation: null
+            }
+          };
         }
-      ];
+        return step;
+      });
     }
 
     const isDemo = Boolean(lesson?.isDemoLesson);

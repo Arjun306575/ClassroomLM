@@ -36,6 +36,10 @@ export const CREDIT_COSTS = {
 
 export const DAILY_CREDITS_QUOTA = 100;
 
+export function getUserSavedStorageKey(uid?: string | null): string {
+  return uid ? `classroomlm_saved_lessons_${uid}` : `classroomlm_saved_lessons_guest`;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -168,9 +172,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setCurrentUser(syntheticUser);
             setUserProfile(prof);
             setCredits(prof.credits ?? DAILY_CREDITS_QUOTA);
-            // Load manual saved items
+            // Load manual saved items strictly scoped to this user
             try {
-              const savedRaw = localStorage.getItem('classroomlm_saved_lessons');
+              const storageKey = getUserSavedStorageKey(parsed.user.uid);
+              const savedRaw = localStorage.getItem(storageKey);
               if (savedRaw) {
                 const lessons = JSON.parse(savedRaw);
                 const items: SavedEducationalItem[] = lessons.map((l: any) => ({
@@ -178,12 +183,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   userId: parsed.user.uid,
                   title: l.title || l.config?.topic || "Lesson",
                   description: l.description || "",
-                  type: 'lesson',
+                  type: l.type || 'lesson',
                   data: l.data || l,
                   config: l.config || {},
                   createdAt: l.createdAt || new Date().toISOString()
                 }));
                 setSavedItems(items);
+              } else {
+                setSavedItems([]);
               }
             } catch (e) {}
             setLoading(false);
@@ -485,7 +492,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.warn("Sign out error", error);
     }
-    localStorage.removeItem('classroomlm_manual_user');
+    try {
+      localStorage.removeItem('classroomlm_manual_user');
+      localStorage.removeItem('classroomlm_saved_lessons');
+    } catch (e) {}
     setCurrentUser(null);
     setUserProfile(null);
     setCredits(DAILY_CREDITS_QUOTA);
@@ -688,12 +698,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString()
     };
 
-    // Update state & cache immediately
+    // Update state & cache immediately with user isolation
     setSavedItems(prev => [fullItem, ...prev.filter(i => i.id !== itemId)]);
     try {
-      const stored = localStorage.getItem('classroomlm_saved_lessons');
+      const storageKey = getUserSavedStorageKey(currentUser.uid);
+      const stored = localStorage.getItem(storageKey);
       const prevLessons = stored ? JSON.parse(stored) : [];
-      localStorage.setItem('classroomlm_saved_lessons', JSON.stringify([fullItem, ...prevLessons.filter((l: any) => l.id !== itemId)]));
+      localStorage.setItem(storageKey, JSON.stringify([fullItem, ...prevLessons.filter((l: any) => l.id !== itemId)]));
+      localStorage.removeItem('classroomlm_saved_lessons');
     } catch (e) {}
 
     if (!currentUser.uid.startsWith('usr_')) {
@@ -708,15 +720,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return itemId;
   }, [currentUser]);
 
-  // Delete Item from Firestore subcollection or local storage
+  // Delete Item from Firestore subcollection or user-scoped local storage
   const deleteItem = useCallback(async (id: string) => {
     if (!currentUser) return;
     setSavedItems(prev => prev.filter(i => i.id !== id));
     try {
-      const stored = localStorage.getItem('classroomlm_saved_lessons');
+      const storageKey = getUserSavedStorageKey(currentUser.uid);
+      const stored = localStorage.getItem(storageKey);
       if (stored) {
         const prevLessons = JSON.parse(stored);
-        localStorage.setItem('classroomlm_saved_lessons', JSON.stringify(prevLessons.filter((l: any) => l.id !== id)));
+        localStorage.setItem(storageKey, JSON.stringify(prevLessons.filter((l: any) => l.id !== id)));
       }
     } catch (e) {}
 

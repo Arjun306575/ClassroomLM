@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Loader2, Sparkles, BookOpen, Brain, Lightbulb, Play, Home, CheckCircle2, BookmarkCheck } from 'lucide-react';
 import { Realistic3DDNA } from './Realistic3DDNA';
-import { useAuth } from '../firebase/authContext';
+import { useAuth, getUserSavedStorageKey } from '../firebase/authContext';
 
 // Adsterra Production Code Placeholders
 const ADSTERRA_320X50_CODE = `<script>
@@ -84,13 +84,15 @@ export function GeneratingClassroom({
       const topic = lessonToSave?.config?.topic || lessonToSave?.title || "Educational Topic";
       const description = lessonToSave?.description || `Class: ${lessonToSave?.config?.classLevel || 'N/A'} | Lang: ${lessonToSave?.config?.language || 'N/A'} | Persona: ${lessonToSave?.config?.persona || 'Friendly Mentor'}`;
 
-      // Automatically save to local storage immediately so it is 100% guaranteed saved
+      // Automatically save to local storage immediately so it is 100% guaranteed saved with strict user isolation
       try {
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('classroomlm_saved_lessons') : null;
+        const storageKey = getUserSavedStorageKey(currentUser?.uid);
+        const stored = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
         const prev = stored ? JSON.parse(stored) : [];
         const filtered = prev.filter((l: any) => l.id !== lessonToSave.id && (l.title || '').trim().toLowerCase() !== topic.trim().toLowerCase());
         if (typeof window !== 'undefined') {
-          localStorage.setItem('classroomlm_saved_lessons', JSON.stringify([lessonToSave, ...filtered]));
+          localStorage.setItem(storageKey, JSON.stringify([lessonToSave, ...filtered]));
+          localStorage.removeItem('classroomlm_saved_lessons');
         }
       } catch (localErr) {
         console.warn("Could not save to localStorage:", localErr);

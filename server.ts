@@ -451,9 +451,19 @@ async function generateContentWithRetry(
  * Queries Wikimedia Commons / Wikipedia API for genuine educational diagrams, scientific illustrations, and photos.
  * Falls back to curated educational diagrams from Pollinations.
  */
-async function fetchInternetImageForSlide(searchKeyword: string, topic: string): Promise<string | null> {
+async function fetchInternetImageForSlide(searchKeyword: string, topic: string, isStoryteller: boolean = false): Promise<string | null> {
   const query = (searchKeyword || topic || "").trim();
   if (!query) return null;
+
+  // In Storyteller mode, generate whimsical, vibrant, colorful storybook adventure digital art
+  if (isStoryteller) {
+    try {
+      const storyPrompt = `whimsical colorful storybook adventure illustration of ${query || topic}, vibrant fairy tale fantasy digital art, beautiful cinematic magical lighting, animated movie style, detailed painting, high fantasy, colorful characters, storybook page art, no text, no watermark`;
+      return `https://image.pollinations.ai/prompt/${encodeURIComponent(storyPrompt)}?width=800&height=600&nologo=true`;
+    } catch (e) {
+      return null;
+    }
+  }
 
   // 1. Try Wikimedia Commons / Wikipedia Search API (clean, high-res encyclopedic images)
   try {
@@ -749,17 +759,38 @@ async function generateLessonLogic(req: express.Request, res: express.Response) 
       f.toLowerCase().includes("visual") || f.toLowerCase().includes("diagram")
     );
     
+    // Check if persona is Storyteller
+    const personaStr = typeof persona === 'string' ? persona : "";
+    const isStoryteller = Boolean(
+      personaStr.toLowerCase().includes("story") || 
+      personaStr.toLowerCase().includes("storyteller") || 
+      personaStr.toLowerCase().includes("story teller")
+    );
+    const shouldFetchImages = isVisualDiagramsSelected || isStoryteller;
+    
     // Construct rich content for the AI to process.
     const contents: any[] = [];
     
     // Persona characteristics
     let personaGuidance = "";
-    if (persona === "Friendly Mentor") {
+    if (isStoryteller) {
+      personaGuidance = `STRICT RULE: PURE ENTERTAINING ADVENTURE STORYTELLING!
+ZERO FORMULAS, ZERO MATH LESSONS, ZERO EQUATIONS, ZERO ACADEMIC LECTURES, AND ZERO SCHOOL/EXAM JARGON!
+You are an enthralling, fun, creative Storyteller. Transform the topic "${effectiveTopic}" into an epic, hilarious, imaginative adventure story packed with colorful, charismatic characters (such as quirky inventors, courageous young adventurers, witty animal companions, or eccentric wizards).
+- Frame the entire experience as pure storytelling and exciting narrative chapters.
+- DO NOT speak or lecture like a school teacher. Do not explain syllabus concepts. Instead, weave an entertaining narrative where the characters embark on a quest, encounter exciting obstacles, discover secrets, and celebrate their triumphs!
+- "timestamp": "Chapter 1: The Spark of Adventure", "Chapter 2: The Call to the Unknown", "Chapter 3: The Secret Path", "Chapter 4: The Great Trial", "Chapter 5: The Grand Feast"
+- "whiteboardContent.heading": Vibrant chapter titles (e.g., "📖 Chapter 1: The Secret of ${effectiveTopic}", "✨ Chapter 2: The Forest of Whispers")
+- "whiteboardContent.bulletPoints": 3 to 4 punchy, colorful story beats or character dialogue moments, each beginning with a fun character/story emoji (e.g., "🌟 Pip dusted off the ancient glowing compass...", "⚔️ Captain Corvus signaled the crew to halt...", "🐉 A sudden rumble echoed through the cavern!"). Absolutely NO formulas, NO math, and NO educational lecture bullets.
+- "whiteboardContent.imageKeyword": Vivid, descriptive scene visual prompt for a storybook illustration.
+- "whiteboardContent.imageCaption": An evocative storybook scene caption.
+- "whiteboardContent.mathEquation": MUST be omitted or null. Do not include any math equations.
+- "spokenDialogue": Expressive, charismatic storytelling with dramatic pacing markers in brackets like [in a hushed suspenseful whisper], [laughs heartily], [excitedly].
+- "quiz": A fun, engaging story adventure trivia quiz about the characters, clues, and plot developments (e.g., "What magical tool did Pip use to cross the bridge?"), NOT a math or school exam quiz!`;
+    } else if (persona === "Friendly Mentor") {
       personaGuidance = "Adopt a warm, encouraging, supportive persona. Use relatable analogies, celebrate curiosity, and make the student feel capable and relaxed.";
     } else if (persona === "Strict Academic") {
       personaGuidance = "Adopt a rigorous, authoritative academic professor persona. Emphasize formal mathematical or scientific definitions, precise logic, exact terminology, and analytical principles.";
-    } else if (persona === "Storyteller") {
-      personaGuidance = "Adopt an enthralling, narrative-driven storyteller persona. Frame the topic as a compelling journey of human discovery, dramatic history, mysteries, and vivid real-world narratives.";
     } else if (persona === "Exam Specialist") {
       personaGuidance = "Adopt a sharp, high-yield exam specialist persona. Focus on scoring techniques, high-frequency test questions, examiner rubrics, memorization mnemonics, and warning flags for common exam pitfalls.";
     } else {
@@ -784,6 +815,24 @@ async function generateLessonLogic(req: express.Request, res: express.Response) 
       }
     }
 
+    const timelineGuidance = isStoryteller ? `
+STORYTELLER ADVENTURE CHAPTERS (5 TO 7 SLIDES):
+Generate a sequential story adventure of 5 to 7 exciting narrative chapters:
+- Slide 1: Chapter 1 - The Spark & The Call to Adventure
+- Slide 2: Chapter 2 - Meeting the Companions & The Quest Begins
+- Slide 3: Chapter 3 - The Hidden Valley & Unexpected Obstacle
+- Slide 4: Chapter 4 - The Climax & Ingenious Solution
+- Slide 5: Chapter 5 - The Triumph, Treasure & Celebration
+STRICT RULE: Pure storytelling, zero math, zero formulas, zero textbook definitions!` : `
+MULTI-SLIDE BLACKBOARD TIMELINE (5 TO 7 SLIDES):
+Generate a sequential deck of 5 to 7 distinct, progressive blackboard slides:
+- Slide 1: Hook & Core Dilemma / Question (Sets the stage and defines the mystery or challenge)
+- Slide 2: Core Foundations & Definitions (Essential terms, principles, and groundwork)
+- Slide 3: Deep Mechanism / Step-by-Step Derivation (The technical heart, equations, or detailed process)
+- Slide 4: Real-World Demonstration / Case Study (Concrete application or worked problem)
+- Slide 5: Common Traps, Misconceptions & High-Yield Tips (What students stumble on and how to ace it)
+- Slide 6: Comprehensive Master Summary & Key Takeaways (Crisp summary of main takeaways)`;
+
     let promptText = `You are an expert virtual classroom teacher designed for an immersive full-screen 2D interactive blackboard experience.
 Your goal is to transform the student's request into a creative, animated, highly engaging multi-slide blackboard lesson for a student at the ${gradeLevel} level.
 The entire lesson, spoken dialogue, whiteboard notes, and quiz MUST be presented in the requested language: "${language}".
@@ -802,14 +851,16 @@ Every single part of the lesson MUST be generated in "${language}":
 - "quiz": Questions, options, and explanations in "${language}".
 
 VISUAL PICTURES MANDATE:
-${isVisualDiagramsSelected 
-  ? `The student selected "Visual Diagrams". For slides where an educational diagram or illustration aids understanding, provide a clear "imageKeyword" and "imageCaption".` 
+${shouldFetchImages 
+  ? (isStoryteller 
+      ? `STORYBOOK PICTURE MANDATE: Every single slide MUST feature a captivating, full-color storybook adventure scene. Provide a vivid, descriptive "imageKeyword" (e.g. "whimsical adventurers crossing a glowing starlight bridge in a fantasy forest") and an evocative "imageCaption" for every slide.` 
+      : `The student selected "Visual Diagrams". For slides where an educational diagram or illustration aids understanding, provide a clear "imageKeyword" and "imageCaption".`)
   : `The student did NOT select "Visual Diagrams". Do NOT include imageKeyword or imageUrl. Keep the chalkboard purely focused on high-density markdown text, formulas, and chalk diagrams.`
 }
 
 CREATIVITY & MARKDOWN MANDATE:
 - Generate creatively! DO NOT start with generic canned openings like "Hello class" or "Welcome to today's lesson". Dive directly into an exciting hook, thought experiment, paradoxical question, or real-world dilemma!
-- Use rich Markdown for the blackboard "bulletPoints" (e.g. bolding key terms with **keyword**, italicizing nuances with *italic*, and LaTeX equations with $$E=mc^2$$ or $x^2$).
+- Use rich Markdown for the blackboard "bulletPoints" (e.g. bolding key terms with **keyword**, italicizing nuances with *italic*).
 
 TOPIC & LESSON PROMPT:
 - Topic / Question: "${effectiveTopic}"
@@ -825,7 +876,7 @@ TOPIC & LESSON PROMPT:
     if (uploadedFile && uploadedFile.base64 && uploadedFile.type) {
       promptText += `- Attached Document: "${uploadedFile.name}" (${uploadedFile.type})\n`;
       promptText += `GROUNDING INSTRUCTION FOR ATTACHED ${uploadedFile.type.includes('pdf') ? 'PDF' : 'IMAGE'}:
-Ground this entire multi-slide blackboard lesson directly on the attached document/image. Explain its key formulas, principles, concepts, and diagrams step-by-step for grade level "${gradeLevel}" in language "${language}", adhering strictly to persona "${persona}".\n`;
+Ground this entire multi-slide blackboard lesson directly on the attached document/image. Explain its key concepts, characters, and scenes step-by-step for grade level "${gradeLevel}" in language "${language}", adhering strictly to persona "${persona}".\n`;
       contents.push({
         inlineData: {
           mimeType: uploadedFile.type,
@@ -835,30 +886,23 @@ Ground this entire multi-slide blackboard lesson directly on the attached docume
     }
 
     promptText += `
-MULTI-SLIDE BLACKBOARD TIMELINE (5 TO 7 SLIDES):
-Generate a sequential deck of 5 to 7 distinct, progressive blackboard slides:
-- Slide 1: Hook & Core Dilemma / Question (Sets the stage and defines the mystery or challenge)
-- Slide 2: Core Foundations & Definitions (Essential terms, principles, and groundwork)
-- Slide 3: Deep Mechanism / Step-by-Step Derivation (The technical heart, equations, or detailed process)
-- Slide 4: Real-World Demonstration / Case Study (Concrete application or worked problem)
-- Slide 5: Common Traps, Misconceptions & High-Yield Tips (What students stumble on and how to ace it)
-- Slide 6: Comprehensive Master Summary & Key Takeaways (Crisp summary of main takeaways)
+${timelineGuidance}
 
 For each slide in the "timeline":
-- "timestamp": A clear slide label like "Slide 1: The Hook", "Slide 2: Foundations", "Slide 3: Deep Dive", "Slide 4: Application", "Slide 5: Common Traps", "Slide 6: Master Summary".
+- "timestamp": A clear slide label like ${isStoryteller ? '"Chapter 1: The Call", "Chapter 2: The Journey", "Chapter 3: The Secret"' : '"Slide 1: The Hook", "Slide 2: Foundations", "Slide 3: Deep Dive"'}.
 - "teacherGesture": One of: "idle", "explaining", "pointing_whiteboard", "celebrating", "writing", "thinking".
 - "spokenDialogue": Spoken aloud in "${language}". Natural, expressive, and persona-driven. Include emotional/pacing cues in square brackets (e.g. [warmly], [pauses], [thinks], [excitedly], [thoughtfully]).
 - "bubbleCaption": A crisp 1-2 sentence subtitle in "${language}".
 - "translationText": If "${language}" is not English, provide an accurate English translation. If English, keep this identical or leave brief.
 - "whiteboardContent":
-  - "heading": Creative blackboard header in "${language}".
-  - "bulletPoints": Exactly 3 to 5 chalk bullet points using Markdown (**bold keywords**, *emphasis*, equations).
-  - "diagramType": One of: "concept_map", "process_flow", "comparison_table", "anatomy_chart", "timeline_chart", "none".
+  - "heading": ${isStoryteller ? 'Exciting chapter title starting with an emoji (e.g. "📖 Chapter 1: ...")' : 'Creative blackboard header in "${language}"'}.
+  - "bulletPoints": Exactly 3 to 5 ${isStoryteller ? 'story beats with fun character emojis (e.g. 🌟, ⚔️, 🐉, 💎). Strictly NO math formulas.' : 'chalk bullet points using Markdown (**bold keywords**, *emphasis*, equations)'}.
+  - "diagramType": ${isStoryteller ? '"none"' : 'One of: "concept_map", "process_flow", "comparison_table", "anatomy_chart", "timeline_chart", "none"'}.
   - "diagramLabels": Array of key terms/labels if diagramType is used.
-  - "mathEquation": Key equation or formula (e.g., "$$E = mc^2$$") if applicable.
-  ${isVisualDiagramsSelected ? `- "imageKeyword": Search keyword for educational diagram.\n  - "imageCaption": Caption in "${language}".` : ''}
+  - "mathEquation": ${isStoryteller ? 'MUST BE null or empty (strictly NO math formulas)' : 'Key equation or formula (e.g., "$$E = mc^2$$") if applicable'}.
+  ${shouldFetchImages ? `- "imageKeyword": Search keyword for storybook visual scene or educational diagram.\n  - "imageCaption": Caption in "${language}".` : ''}
 
-"quiz": Include 3 interactive multiple-choice questions testing the concepts taught in "${language}". Each question must have "question", "options" (4 choices), "correctIndex", and "explanation".
+"quiz": Include 3 interactive multiple-choice questions testing ${isStoryteller ? 'the adventure story events and character details' : 'the concepts taught'} in "${language}". Each question must have "question", "options" (4 choices), "correctIndex", and "explanation".
 
 Respond strictly with valid JSON matching the schema.`;
 
@@ -941,143 +985,285 @@ Respond strictly with valid JSON matching the schema.`;
       parsedData = JSON.parse(cleanedText);
     } catch (modelErr: any) {
       console.warn("AI generation encountered issue, constructing tailored curriculum slides:", modelErr?.message || modelErr);
-      // Construct rich, personalized curriculum slides adhering to language, class, persona, and focus
-      parsedData = {
-        title: effectiveTopic,
-        description: `Grade: ${gradeLevel} | Language: ${language} | Persona: ${persona}`,
-        timeline: [
-          {
-            timestamp: "Slide 1: The Core Mystery & Hook",
-            teacherGesture: "thinking",
-            spokenDialogue: language === "English"
-              ? `What makes ${effectiveTopic} so vital to understand? Let us examine the big picture dilemma right here on the blackboard.`
-              : `[${persona}] ${effectiveTopic} (${language}): Explore the core principles and foundations.`,
-            bubbleCaption: `Unlocking the core mystery of ${effectiveTopic}`,
-            translationText: `Unlocking the core mystery of ${effectiveTopic}`,
-            whiteboardContent: {
-              heading: `${effectiveTopic}: The Big Picture`,
-              bulletPoints: [
-                `Fundamental definition and context of ${effectiveTopic}`,
-                "The central problem and guiding scientific question",
-                "Why this discovery transformed modern understanding"
-              ],
-              diagramType: "concept_map",
-              diagramLabels: ["Observation", "Core Principle", "Impact"],
-              imageKeyword: `${effectiveTopic} scientific diagram overview`,
-              imageCaption: `Visual overview of ${effectiveTopic}`
+      if (isStoryteller) {
+        parsedData = {
+          title: `The Grand Adventure of ${effectiveTopic}`,
+          description: `An exciting story adventure | Storyteller Persona | ${language}`,
+          timeline: [
+            {
+              timestamp: "Chapter 1: The Whispering Mystery",
+              teacherGesture: "thinking",
+              spokenDialogue: `[whispers mysteriously] Long ago, beyond the misty peaks of Mount Solaria, there existed a secret known only as ${effectiveTopic}. Today, our adventure begins!`,
+              bubbleCaption: `Chapter 1: The Whispering Mystery of ${effectiveTopic}`,
+              translationText: `Chapter 1: The Whispering Mystery of ${effectiveTopic}`,
+              whiteboardContent: {
+                heading: `📖 Chapter 1: The Whispering Mystery`,
+                bulletPoints: [
+                  `🌟 In a sleepy valley, young Pip uncovered a worn journal describing ${effectiveTopic}`,
+                  "🧭 An ancient bronze compass began spinning toward the Enchanted Ridge",
+                  "✨ 'The journey begins now!' cheered Barnaby the brave badger"
+                ],
+                diagramType: "none",
+                imageKeyword: `mysterious glowing journal about ${effectiveTopic} in enchanted library fantasy art`,
+                imageCaption: `Pip discovers the ancient journal of ${effectiveTopic}`
+              }
+            },
+            {
+              timestamp: "Chapter 2: The Journey Begins",
+              teacherGesture: "explaining",
+              spokenDialogue: `[excitedly] Packing their satchels with enchanted berries and star-lanterns, Pip and Barnaby set off down the Golden Trail!`,
+              bubbleCaption: `Chapter 2: The Journey Begins`,
+              translationText: `Chapter 2: The Journey Begins`,
+              whiteboardContent: {
+                heading: `⚔️ Chapter 2: Down the Golden Trail`,
+                bulletPoints: [
+                  "🌲 The ancient forest trees glowed with soft bioluminescent moss",
+                  "🦊 Lady Seraphina, the swift fox guide, joined the party with a secret map",
+                  "💫 Every step echoed with musical chimes through the mountain pass"
+                ],
+                diagramType: "none",
+                imageKeyword: `fantasy adventurers walking through glowing bioluminescent forest golden trail`,
+                imageCaption: `The companions march down the Golden Trail`
+              }
+            },
+            {
+              timestamp: "Chapter 3: The Riddle of the Whispering Gorge",
+              teacherGesture: "pointing_whiteboard",
+              spokenDialogue: `[pauses dramatically] Suddenly, the path ended at the Whispering Gorge! A roaring river of crystalline water blocked their way, guarded by a stone guardian with sparkling eyes!`,
+              bubbleCaption: `Chapter 3: The Riddle of the Whispering Gorge`,
+              translationText: `Chapter 3: The Riddle of the Whispering Gorge`,
+              whiteboardContent: {
+                heading: `🌊 Chapter 3: The Whispering Gorge`,
+                bulletPoints: [
+                  "🗿 The great stone guardian spoke: 'Only those with courage may pass!'",
+                  "💡 Pip realized the secret harmony of the river ripples",
+                  "🌈 A luminous bridge of rainbow light formed over the swirling gorge"
+                ],
+                diagramType: "none",
+                imageKeyword: `fantasy crystal river gorge magical rainbow bridge glowing stone guardian`,
+                imageCaption: `The rainbow bridge appears across the gorge`
+              }
+            },
+            {
+              timestamp: "Chapter 4: The Heart of the Quest",
+              teacherGesture: "writing",
+              spokenDialogue: `[warmly and triumphantly] Stepping across the shining bridge, the companions reached the Sunstone Sanctum. There, glowing softly, was the wonder of ${effectiveTopic}!`,
+              bubbleCaption: `Chapter 4: The Sunstone Sanctum`,
+              translationText: `Chapter 4: The Sunstone Sanctum`,
+              whiteboardContent: {
+                heading: `💎 Chapter 4: The Sunstone Sanctum`,
+                bulletPoints: [
+                  `🌟 The sanctum glowed with radiant warmth and swirling starlight`,
+                  "📜 The truth of the ancient mystery unfolded in breathtaking splendor",
+                  "🤝 Pip, Barnaby, and Seraphina knew their bond had made it possible"
+                ],
+                diagramType: "none",
+                imageKeyword: `radiant glowing sanctuary temple crystal starlight magical fantasy art`,
+                imageCaption: `The companions reach the Sunstone Sanctum`
+              }
+            },
+            {
+              timestamp: "Chapter 5: The Grand Celebration",
+              teacherGesture: "celebrating",
+              spokenDialogue: `[laughs with joy] The entire kingdom cheered as the adventurers returned! Fireworks lit up the night sky, and the tale of ${effectiveTopic} would be sung for generations!`,
+              bubbleCaption: `Chapter 5: The Grand Celebration`,
+              translationText: `Chapter 5: The Grand Celebration`,
+              whiteboardContent: {
+                heading: `🎉 Chapter 5: The Grand Celebration`,
+                bulletPoints: [
+                  "🎆 Lanterns and fireworks filled the midnight starry sky",
+                  "🎶 The village square echoed with music, laughter, and warm cider",
+                  "⭐ Until the next adventure calls under the stars!"
+                ],
+                diagramType: "none",
+                imageKeyword: `fantasy village celebration festival fireworks lanterns cheering colorful night`,
+                imageCaption: `A grand festival celebration under the stars`
+              }
             }
-          },
-          {
-            timestamp: "Slide 2: Essential Foundations & Terms",
-            teacherGesture: "explaining",
-            spokenDialogue: language === "English"
-              ? `Now, let us break down the bedrock foundations of ${effectiveTopic}. Notice how each component links together.`
-              : `[${persona}] Foundations and core mechanisms of ${effectiveTopic}.`,
-            bubbleCaption: `Key foundations of ${effectiveTopic}`,
-            translationText: `Key foundations of ${effectiveTopic}`,
-            whiteboardContent: {
-              heading: "Key Foundations & Definitions",
-              bulletPoints: [
-                "Primary rule and axiomatic definitions",
-                "Essential variables and active components",
-                "How force, logic, or energy flows through this structure"
+          ],
+          quiz: [
+            {
+              question: `Who accompanied Pip on the quest to discover ${effectiveTopic}?`,
+              options: [
+                "Barnaby the brave badger and Lady Seraphina",
+                "A grumpy dragon that refused to walk",
+                "Nobody, Pip went completely alone",
+                "A pirate captain looking for gold"
               ],
-              diagramType: "process_flow",
-              diagramLabels: ["Input / Cause", "Mechanism", "Result"],
-              imageKeyword: `${effectiveTopic} structure diagram`,
-              imageCaption: `Structure and components of ${effectiveTopic}`
-            }
-          },
-          {
-            timestamp: "Slide 3: Deep Mechanism & Formula",
-            teacherGesture: "writing",
-            spokenDialogue: language === "English"
-              ? `Here is the mathematical and mechanical core. Follow this step-by-step derivation closely.`
-              : `[${persona}] Deep step-by-step derivation for ${effectiveTopic}.`,
-            bubbleCaption: `Deep dive mechanism of ${effectiveTopic}`,
-            translationText: `Deep dive mechanism of ${effectiveTopic}`,
-            whiteboardContent: {
-              heading: "Deep Dive: Step-by-Step Mechanism",
-              bulletPoints: [
-                "Step 1: Identify the primary state and known parameters",
-                "Step 2: Apply the governing transformation equation",
-                "Step 3: Analyze the conservation or equilibrium state"
+              correctIndex: 0,
+              explanation: "Barnaby the brave badger and Lady Seraphina the fox accompanied Pip on the journey!"
+            },
+            {
+              question: `How did the companions cross the roaring Whispering Gorge?`,
+              options: [
+                "A luminous bridge of rainbow light appeared",
+                "They built a wooden catapult",
+                "They swam through the icy waters",
+                "They waited three years for the water to dry"
               ],
-              diagramType: "comparison_table",
-              mathEquation: "$$\\Delta E = mc^2 \\quad \\text{or} \\quad F = ma$$",
-              imageKeyword: `${effectiveTopic} formula derivation`,
-              imageCaption: `Governing equations of ${effectiveTopic}`
-            }
-          },
-          {
-            timestamp: "Slide 4: Real-World Demonstration",
-            teacherGesture: "pointing_whiteboard",
-            spokenDialogue: language === "English"
-              ? `Where do we see ${effectiveTopic} in everyday life and industry? Here is concrete evidence in action.`
-              : `[${persona}] Real-world applications of ${effectiveTopic}.`,
-            bubbleCaption: `Real-world applications of ${effectiveTopic}`,
-            translationText: `Real-world applications of ${effectiveTopic}`,
-            whiteboardContent: {
-              heading: "Real-World Applications & Demonstration",
-              bulletPoints: [
-                "Modern engineering and technological applications",
-                "Observable phenomena in nature and daily environment",
-                "Case study: Breakthrough industrial or biological implementation"
+              correctIndex: 0,
+              explanation: "Pip solved the guardian's riddle, causing a luminous bridge of rainbow light to form!"
+            },
+            {
+              question: `What happened when Pip, Barnaby, and Seraphina returned to the village?`,
+              options: [
+                "A grand festival celebration with fireworks and music",
+                "The village was completely empty",
+                "They were put in timeout",
+                "They forgot where they had gone"
               ],
-              diagramType: "anatomy_chart",
-              diagramLabels: ["Core Source", "Distribution", "End Use"],
-              imageKeyword: `${effectiveTopic} real world application`,
-              imageCaption: `Real-world implementation of ${effectiveTopic}`
+              correctIndex: 0,
+              explanation: "The village celebrated with a grand festival of lanterns, music, and fireworks!"
             }
-          },
-          {
-            timestamp: "Slide 5: Common Traps & Pro-Tips",
-            teacherGesture: "celebrating",
-            spokenDialogue: language === "English"
-              ? `To ace this topic in exams, remember these golden takeaways and beware of this common misconception!`
-              : `[${persona}] Exam pro-tips and key takeaways for ${effectiveTopic}.`,
-            bubbleCaption: `Pro-tips and master summary`,
-            translationText: `Pro-tips and master summary`,
-            whiteboardContent: {
-              heading: "EXAM PRO-TIPS & KEY TAKEAWAYS",
-              bulletPoints: [
-                "Core Rule: Master the first principle before memorizing formulas",
-                "Common Pitfall: Don't confuse the underlying causes with secondary effects",
-                "Golden Takeaway: Always verify boundary conditions and units"
+          ]
+        };
+      } else {
+        // Construct rich, personalized curriculum slides adhering to language, class, persona, and focus
+        parsedData = {
+          title: effectiveTopic,
+          description: `Grade: ${gradeLevel} | Language: ${language} | Persona: ${persona}`,
+          timeline: [
+            {
+              timestamp: "Slide 1: The Core Mystery & Hook",
+              teacherGesture: "thinking",
+              spokenDialogue: language === "English"
+                ? `What makes ${effectiveTopic} so vital to understand? Let us examine the big picture dilemma right here on the blackboard.`
+                : `[${persona}] ${effectiveTopic} (${language}): Explore the core principles and foundations.`,
+              bubbleCaption: `Unlocking the core mystery of ${effectiveTopic}`,
+              translationText: `Unlocking the core mystery of ${effectiveTopic}`,
+              whiteboardContent: {
+                heading: `${effectiveTopic}: The Big Picture`,
+                bulletPoints: [
+                  `Fundamental definition and context of ${effectiveTopic}`,
+                  "The central problem and guiding scientific question",
+                  "Why this discovery transformed modern understanding"
+                ],
+                diagramType: "concept_map",
+                diagramLabels: ["Observation", "Core Principle", "Impact"],
+                imageKeyword: `${effectiveTopic} scientific diagram overview`,
+                imageCaption: `Visual overview of ${effectiveTopic}`
+              }
+            },
+            {
+              timestamp: "Slide 2: Essential Foundations & Terms",
+              teacherGesture: "explaining",
+              spokenDialogue: language === "English"
+                ? `Now, let us break down the bedrock foundations of ${effectiveTopic}. Notice how each component links together.`
+                : `[${persona}] Foundations and core mechanisms of ${effectiveTopic}.`,
+              bubbleCaption: `Key foundations of ${effectiveTopic}`,
+              translationText: `Key foundations of ${effectiveTopic}`,
+              whiteboardContent: {
+                heading: "Key Foundations & Definitions",
+                bulletPoints: [
+                  "Primary rule and axiomatic definitions",
+                  "Essential variables and active components",
+                  "How force, logic, or energy flows through this structure"
+                ],
+                diagramType: "process_flow",
+                diagramLabels: ["Input / Cause", "Mechanism", "Result"],
+                imageKeyword: `${effectiveTopic} structure diagram`,
+                imageCaption: `Structure and components of ${effectiveTopic}`
+              }
+            },
+            {
+              timestamp: "Slide 3: Deep Mechanism & Formula",
+              teacherGesture: "writing",
+              spokenDialogue: language === "English"
+                ? `Here is the mathematical and mechanical core. Follow this step-by-step derivation closely.`
+                : `[${persona}] Deep step-by-step derivation for ${effectiveTopic}.`,
+              bubbleCaption: `Deep dive mechanism of ${effectiveTopic}`,
+              translationText: `Deep dive mechanism of ${effectiveTopic}`,
+              whiteboardContent: {
+                heading: "Deep Dive: Step-by-Step Mechanism",
+                bulletPoints: [
+                  "Step 1: Identify the primary state and known parameters",
+                  "Step 2: Apply the governing transformation equation",
+                  "Step 3: Analyze the conservation or equilibrium state"
+                ],
+                diagramType: "comparison_table",
+                mathEquation: "$$\\Delta E = mc^2 \\quad \\text{or} \\quad F = ma$$",
+                imageKeyword: `${effectiveTopic} formula derivation`,
+                imageCaption: `Governing equations of ${effectiveTopic}`
+              }
+            },
+            {
+              timestamp: "Slide 4: Real-World Demonstration",
+              teacherGesture: "pointing_whiteboard",
+              spokenDialogue: language === "English"
+                ? `Where do we see ${effectiveTopic} in everyday life and industry? Here is concrete evidence in action.`
+                : `[${persona}] Real-world applications of ${effectiveTopic}.`,
+              bubbleCaption: `Real-world applications of ${effectiveTopic}`,
+              translationText: `Real-world applications of ${effectiveTopic}`,
+              whiteboardContent: {
+                heading: "Real-World Applications & Demonstration",
+                bulletPoints: [
+                  "Modern engineering and technological applications",
+                  "Observable phenomena in nature and daily environment",
+                  "Case study: Breakthrough industrial or biological implementation"
+                ],
+                diagramType: "anatomy_chart",
+                diagramLabels: ["Core Source", "Distribution", "End Use"],
+                imageKeyword: `${effectiveTopic} real world application`,
+                imageCaption: `Real-world implementation of ${effectiveTopic}`
+              }
+            },
+            {
+              timestamp: "Slide 5: Common Traps & Pro-Tips",
+              teacherGesture: "celebrating",
+              spokenDialogue: language === "English"
+                ? `To ace this topic in exams, remember these golden takeaways and beware of this common misconception!`
+                : `[${persona}] Exam pro-tips and key takeaways for ${effectiveTopic}.`,
+              bubbleCaption: `Pro-tips and master summary`,
+              translationText: `Pro-tips and master summary`,
+              whiteboardContent: {
+                heading: "EXAM PRO-TIPS & KEY TAKEAWAYS",
+                bulletPoints: [
+                  "Core Rule: Master the first principle before memorizing formulas",
+                  "Common Pitfall: Don't confuse the underlying causes with secondary effects",
+                  "Golden Takeaway: Always verify boundary conditions and units"
+                ],
+                diagramType: "concept_map",
+                imageKeyword: `${effectiveTopic} infographic summary`,
+                imageCaption: `Key takeaways on ${effectiveTopic}`
+              }
+            }
+          ],
+          quiz: [
+            {
+              question: `What is the primary governing principle of ${effectiveTopic}?`,
+              options: [
+                "The foundational conservation law",
+                "A random unverified hypothesis",
+                "An outdated assumption from the 17th century",
+                "A variable that only applies in vacuums"
               ],
-              diagramType: "concept_map",
-              imageKeyword: `${effectiveTopic} infographic summary`,
-              imageCaption: `Key takeaways on ${effectiveTopic}`
+              correctIndex: 0,
+              explanation: `The foundational conservation law establishes the bedrock behavior of ${effectiveTopic}.`
             }
-          }
-        ],
-        quiz: [
-          {
-            question: `What is the primary governing principle of ${effectiveTopic}?`,
-            options: [
-              "The foundational conservation law",
-              "A random unverified hypothesis",
-              "An outdated assumption from the 17th century",
-              "A variable that only applies in vacuums"
-            ],
-            correctIndex: 0,
-            explanation: `The foundational conservation law establishes the bedrock behavior of ${effectiveTopic}.`
-          }
-        ]
-      };
+          ]
+        };
+      }
     }
 
-    // Pre-resolve related images from the internet ONLY IF Visual Diagrams is selected in focus areas
+    // Pre-resolve related images from the internet if Visual Diagrams or Storyteller mode is active
     if (parsedData.timeline && Array.isArray(parsedData.timeline)) {
-      if (isVisualDiagramsSelected) {
+      if (shouldFetchImages) {
         await Promise.allSettled(
-          parsedData.timeline.map(async (step: any) => {
+          parsedData.timeline.map(async (step: any, idx: number) => {
             try {
               const wb = step.whiteboardContent || {};
               const searchKeyword = wb.imageKeyword || wb.heading || effectiveTopic;
-              const internetImageUrl = await fetchInternetImageForSlide(searchKeyword, effectiveTopic);
+              const internetImageUrl = await fetchInternetImageForSlide(searchKeyword, effectiveTopic, isStoryteller);
               if (internetImageUrl) {
                 wb.imageUrl = internetImageUrl;
+              }
+              if (isStoryteller) {
+                // Strictly guarantee zero formulas in Storyteller mode
+                delete wb.mathEquation;
+                wb.mathEquation = null;
+                if (!wb.imageUrl) {
+                  wb.imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`whimsical colorful storybook adventure illustration of chapter ${idx + 1}, ${wb.heading || effectiveTopic}, fairy tale digital art, cinematic lighting, no text`)}?width=800&height=600&nologo=true`;
+                }
               }
             } catch (e) {
               console.warn("Error fetching slide internet image:", e);
@@ -1091,6 +1277,19 @@ Respond strictly with valid JSON matching the schema.`;
             delete step.whiteboardContent.imageUrl;
             delete step.whiteboardContent.imageKeyword;
             delete step.whiteboardContent.imageCaption;
+          }
+        });
+      }
+
+      // Hard strict guarantee: in Storyteller mode, zero formulas and every slide has a storybook picture
+      if (isStoryteller) {
+        parsedData.timeline.forEach((step: any, idx: number) => {
+          if (step.whiteboardContent) {
+            delete step.whiteboardContent.mathEquation;
+            step.whiteboardContent.mathEquation = null;
+            if (!step.whiteboardContent.imageUrl) {
+              step.whiteboardContent.imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`vibrant fantasy storybook scene chapter ${idx + 1}, ${step.whiteboardContent.heading || effectiveTopic}, fairy tale animation style, beautiful lighting, no text`)}?width=800&height=600&nologo=true`;
+            }
           }
         });
       }
@@ -1341,6 +1540,15 @@ app.post("/api/ask-doubt", verifyFirebaseToken, async (req, res) => {
       }
     }
 
+    const persona = lessonContext?.config?.persona || "";
+    const isStoryteller = Boolean(
+      typeof persona === 'string' && (
+        persona.toLowerCase().includes("story") || 
+        persona.toLowerCase().includes("storyteller") || 
+        persona.toLowerCase().includes("story teller")
+      )
+    );
+
     const promptText = `
 You are the active AI Teacher/Tutor in ClassroomLM.
 You have a specific teaching persona: "${lessonContext?.config?.persona || "An encouraging, clear, and interactive AI Professor"}".
@@ -1368,6 +1576,12 @@ CRITICAL GUIDELINES:
 5. Whiteboard Visuals: Update the 'whiteboardChanges' object to visually explain your answer (list clear bullet points, set an appropriate diagramType, and include a math equation or formula if helpful).
 6. Emotions & Pacing: You MUST integrate emotional/pacing markers like [warmly], [pauses], [thinks], [excitedly], or [laughs] inside the 'dialogue' text. Place them strategically at the beginning, middle, and end of the spoken text.
 7. Tone: Be a supportive, warm, and highly engaging AI tutor for ${gradeLevel || "7th Grade"} level.
+${isStoryteller ? `
+8. STORYTELLER PERSONA MANDATE:
+The student is immersed in an entertaining adventure story. The question relates to the story, characters, quest, or magical lore.
+STRICT RULE: ZERO FORMULAS, ZERO MATH LESSONS, ZERO EDUCATIONAL LECTURES!
+Answer enthusiastically as the grand storyteller, expanding the adventure narrative, character personalities, and exciting plot twists!
+Keep 'whiteboardChanges.mathEquation' as null or empty string, and use fun story character emojis (e.g. 🌟, ⚔️, 🐉) in bullet points!` : ''}
 
 Format the output strictly as a JSON object matching this schema:
 {
@@ -1378,7 +1592,7 @@ Format the output strictly as a JSON object matching this schema:
     "bulletPoints": ["Bullet 1 explaining the doubt", "Bullet 2 explaining the doubt"],
     "diagramType": "Choose one of: none, process_flow, comparison_table, anatomy_chart, timeline_chart, concept_map",
     "diagramLabels": ["Label A", "Label B"],
-    "mathEquation": "Optional formula or concept word"
+    "mathEquation": ${isStoryteller ? 'null' : '"Optional formula or concept word"'}
   },
   "transitionBack": "A warm transitional phrase in ${language || "English"}"
 }
@@ -1460,9 +1674,13 @@ Format the output strictly as a JSON object matching this schema:
     const parsedData = JSON.parse(cleanedText);
 
     if (parsedData.whiteboardChanges) {
+      if (isStoryteller) {
+        delete parsedData.whiteboardChanges.mathEquation;
+        parsedData.whiteboardChanges.mathEquation = null;
+      }
       try {
         const query = parsedData.whiteboardChanges.heading || doubt;
-        const img = await fetchInternetImageForSlide(query, doubt);
+        const img = await fetchInternetImageForSlide(query, doubt, isStoryteller);
         if (img) {
           parsedData.whiteboardChanges.imageUrl = img;
         }
@@ -1478,6 +1696,33 @@ Format the output strictly as a JSON object matching this schema:
       rotateGeminiClient(); 
     } 
     const studentDoubt = req.body?.doubt || "this question";
+    const reqPersona = req.body?.lessonContext?.config?.persona || "";
+    const reqIsStoryteller = Boolean(
+      typeof reqPersona === 'string' && (
+        reqPersona.toLowerCase().includes("story") || 
+        reqPersona.toLowerCase().includes("storyteller") || 
+        reqPersona.toLowerCase().includes("story teller")
+      )
+    );
+
+    if (reqIsStoryteller) {
+      return res.json({
+        dialogue: `[laughs with excitement] Ah, what a thrilling question about ${studentDoubt}! Let us see what our brave companions do next!`,
+        teacherGesture: "explaining",
+        whiteboardChanges: {
+          heading: `📖 Tale of ${studentDoubt.slice(0, 30)}`,
+          bulletPoints: [
+            `🌟 The mysterious secret of ${studentDoubt}`,
+            "⚔️ Pip and Barnaby press onward through the mist",
+            "✨ A sparkling trail appears leading to the next discovery!"
+          ],
+          diagramType: "none",
+          imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`whimsical fantasy storybook scene of ${studentDoubt}, colorful animated digital painting, glowing magical lanterns, fairy tale art, no text`)}?width=800&height=600&nologo=true`
+        },
+        transitionBack: "And now, back to our epic story adventure!"
+      });
+    }
+
     return res.json({
       dialogue: `That is an insightful question about ${studentDoubt}! Let us review the fundamental principles that explain this concept clearly on our blackboard.`,
       teacherGesture: "explaining",
