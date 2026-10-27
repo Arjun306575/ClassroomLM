@@ -207,82 +207,272 @@ export function GeneratingClassroom({
         const focusArea = lessonData?.config?.focusArea || [];
         const focusList = Array.isArray(focusArea) ? focusArea : (focusArea ? [focusArea] : []);
         const hasVisualDiagrams = focusList.some((f: string) => f.toLowerCase().includes("visual") || f.toLowerCase().includes("diagram"));
+        const isStoryteller = Boolean(
+          typeof persona === 'string' && (
+            persona.toLowerCase().includes("story") ||
+            persona.toLowerCase().includes("storyteller") ||
+            persona.toLowerCase().includes("story teller")
+          )
+        );
 
-        const fallbackTimeline = [
-          {
-            timestamp: "Slide 1: Foundations & Hook",
-            teacherGesture: "thinking",
-            spokenDialogue: `Welcome to our study of ${topic} for ${classLevel}. Let us break down the foundational principles right here on the blackboard.`,
-            bubbleCaption: `Core Foundations of ${topic}`,
-            whiteboardContent: {
-              heading: `${topic}: Core Foundations`,
-              bulletPoints: [
-                `**Core Definition**: Essential definition and purpose of ${topic}`,
-                `**Key Components**: Critical interacting elements designed for ${classLevel}`,
-                "**Importance**: Why this concept is fundamental to master"
-              ],
-              diagramType: "none",
-              ...(hasVisualDiagrams ? {
-                imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(topic + " scientific diagram textbook style clean white background")}?width=800&height=600&nologo=true`,
-                imageCaption: `Foundations of ${topic}`
-              } : {})
-            }
-          },
-          {
-            timestamp: "Slide 2: Step-by-Step Mechanism",
-            teacherGesture: "writing",
-            spokenDialogue: `Looking deeper at the mechanics of ${topic}, observe how each component directly dictates the outcome.`,
-            bubbleCaption: `Deep Dive into ${topic}`,
-            whiteboardContent: {
-              heading: "Step-by-Step Mechanisms",
-              bulletPoints: [
-                "**Governing Rule**: Primary scientific law or formula in action",
-                "**State Transitions**: Critical boundary conditions and changes",
-                "**Common Nuance**: High-yield distinctions to remember"
-              ],
-              diagramType: "none",
-              mathEquation: "$$\\Delta E = mc^2 \\quad \\text{or} \\quad F = ma$$",
-              ...(hasVisualDiagrams ? {
-                imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(topic + " structure mechanism diagram white background")}?width=800&height=600&nologo=true`,
-                imageCaption: `Mechanisms of ${topic}`
-              } : {})
-            }
-          },
-          {
-            timestamp: "Slide 3: Real-World Demonstration",
-            teacherGesture: "pointing_whiteboard",
-            spokenDialogue: `Notice how ${topic} manifests in technology, nature, and everyday life. Here is the concrete proof.`,
-            bubbleCaption: `Real-World Application of ${topic}`,
-            whiteboardContent: {
-              heading: "Real-World Demonstrations & Cases",
-              bulletPoints: [
-                "**Industrial Application**: Practical modern applications and breakthroughs",
-                "**Observable Phenomena**: Where we see this in everyday environments",
-                "**Case Study**: Real-world experimental evidence"
-              ],
-              diagramType: "none",
-              ...(hasVisualDiagrams ? {
-                imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(topic + " real world experiment diagram white background")}?width=800&height=600&nologo=true`,
-                imageCaption: `Real-world application of ${topic}`
-              } : {})
-            }
-          },
-          {
-            timestamp: "Slide 4: Common Pitfalls & Exam Tips",
-            teacherGesture: "celebrating",
-            spokenDialogue: `To ace this topic, remember these critical exam takeaways and common mistakes students make.`,
-            bubbleCaption: `Master Summary for ${topic}`,
-            whiteboardContent: {
-              heading: "Pro-Tips & Master Summary",
-              bulletPoints: [
-                "**High-Yield Takeaway**: Always verify fundamental assumptions first",
-                "**Frequent Trap**: Avoid confusing symptoms with root causes",
-                "**Golden Rule**: Be ready to state the governing mechanism clearly"
-              ],
-              diagramType: "none"
-            }
+        let fallbackTimeline: any[] = [];
+
+        if (isStoryteller) {
+          const isRumpel = topic.toLowerCase().includes("rumpel");
+          if (isRumpel) {
+            fallbackTimeline = [
+              {
+                timestamp: "Chapter 1: The Miller's Boast",
+                teacherGesture: "thinking",
+                spokenDialogue: `[whispers mysteriously] Once upon a time, a foolish miller boasted that his daughter could spin ordinary straw into pure gleaming gold! The greedy King locked her in a stone tower filled with straw.`,
+                bubbleCaption: "Chapter 1: The Miller's Boast & The Tower of Straw",
+                whiteboardContent: {
+                  heading: "🌾 Chapter 1: Straw & The Miller's Boast",
+                  bulletPoints: [
+                    "🗣️ A boastful miller claimed his daughter could spin straw into pure gold",
+                    "🏰 The greedy King locked her inside a cold stone tower filled with straw",
+                    "😢 Weeping in despair, she had no idea how to perform such magic!"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent("Rumpelstiltskin fairytale illustration, miller's daughter crying in castle tower surrounded by piles of straw, magical storybook art, vibrant colors, no text")}?width=800&height=600&nologo=true`,
+                  imageCaption: "The miller's daughter locked in the castle tower"
+                }
+              },
+              {
+                timestamp: "Chapter 2: The Mysterious Visitor",
+                teacherGesture: "explaining",
+                spokenDialogue: `[excitedly] Creak! In hopped a curious little imp with a pointed hat! 'What will you give me,' he grinned, 'if I spin this straw into gold for you?'`,
+                bubbleCaption: "Chapter 2: The Little Imp & The Spinning Wheel",
+                whiteboardContent: {
+                  heading: "✨ Chapter 2: The Little Imp's Bargain",
+                  bulletPoints: [
+                    "🚪 A tiny, strange man stepped through the locked door with a grin",
+                    "📿 In exchange for her golden necklace, he sat down at the spinning wheel",
+                    "🧵 Whirr! By sunrise, every spool sparkled with solid gold!"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent("Rumpelstiltskin imp spinning golden straw into gold at wooden spinning wheel in stone castle, fairytale fantasy art, no text")}?width=800&height=600&nologo=true`,
+                  imageCaption: "The imp spins straw into glittering gold"
+                }
+              },
+              {
+                timestamp: "Chapter 3: The Fatal Bargain",
+                teacherGesture: "writing",
+                spokenDialogue: `[pauses with dramatic suspense] For three nights the imp spun piles of gold. But having no more jewels, the maiden promised her firstborn child once she became Queen!`,
+                bubbleCaption: "Chapter 3: The Fatal Bargain",
+                whiteboardContent: {
+                  heading: "👑 Chapter 3: The Fatal Bargain",
+                  bulletPoints: [
+                    "🪙 The King was overjoyed by the mountains of gold and married the girl",
+                    "👶 A year later, a sweet royal baby was born to the new Queen",
+                    "🕯️ Suddenly, the imp returned: 'Now fulfill your promise!'"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent("fairytale queen in royal palace holding baby with little imp returning demanding promise, magical storybook painting, no text")}?width=800&height=600&nologo=true`,
+                  imageCaption: "The imp returns to claim his prize"
+                }
+              },
+              {
+                timestamp: "Chapter 4: The Fire in the Forest",
+                teacherGesture: "pointing_whiteboard",
+                spokenDialogue: `[with hushed suspense] 'I give you three days!' sneered the imp. 'Guess my name, or the child is mine!' On the third midnight, a royal messenger discovered a roaring fire deep in the dark woods!`,
+                bubbleCaption: "Chapter 4: The Secret Midnight Fire",
+                whiteboardContent: {
+                  heading: "🔥 Chapter 4: The Secret Fire in the Woods",
+                  bulletPoints: [
+                    "⏳ 'Three days to guess my name, or the baby is mine!' warned the imp",
+                    "📜 The Queen collected every strange name across the whole realm",
+                    "🌲 Deep in the forest, a messenger discovered a roaring fire on a hill"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent("Rumpelstiltskin dancing around a roaring campfire in dark enchanted forest full moon, magical fairytale storybook painting, no text")}?width=800&height=600&nologo=true`,
+                  imageCaption: "A campfire burns deep in the dark forest"
+                }
+              },
+              {
+                timestamp: "Chapter 5: Rumpelstiltskin is My Name!",
+                teacherGesture: "celebrating",
+                spokenDialogue: `[laughs triumphantly] Leaping over the flames, the imp sang: 'Today I brew, tomorrow I bake, the Queen's child I take! For my name is RUMPELSTILTSKIN!' When the Queen spoke his name, he stomped his foot and vanished forever!`,
+                bubbleCaption: "Chapter 5: The Secret Name is Revealed!",
+                whiteboardContent: {
+                  heading: "🎉 Chapter 5: The Secret Name is Revealed!",
+                  bulletPoints: [
+                    "🔥 The imp sang wildly: 'Today I brew, tomorrow I bake, my name is RUMPELSTILTSKIN!'",
+                    "👑 The messenger raced back and whispered the secret into the Queen's ear",
+                    "⚡ When the Queen spoke his name, the furious imp vanished into thin air!"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent("Rumpelstiltskin stomping foot in royal throne room Queen holding baby cheering royal court, vibrant fairytale illustration, no text")}?width=800&height=600&nologo=true`,
+                  imageCaption: "The Queen discovers the secret name"
+                }
+              }
+            ];
+          } else {
+            fallbackTimeline = [
+              {
+                timestamp: "Chapter 1: The Spark of Adventure",
+                teacherGesture: "thinking",
+                spokenDialogue: `[whispers mysteriously] Long ago, beyond the misty mountains, an extraordinary adventure began with ${topic}! Let the story unfold.`,
+                bubbleCaption: `Chapter 1: The Spark of ${topic}`,
+                whiteboardContent: {
+                  heading: `📖 Chapter 1: The Call to Adventure`,
+                  bulletPoints: [
+                    `🌟 An ancient secret regarding ${topic} was uncovered in a hidden valley`,
+                    "🧭 A gleaming compass spun wildly toward unexplored lands",
+                    "✨ The fearless companions set out with hope in their hearts"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`storybook adventure illustration of ${topic}, chapter 1, fantasy art, cinematic lighting, no text`)}?width=800&height=600&nologo=true`,
+                  imageCaption: `The adventure of ${topic} begins`
+                }
+              },
+              {
+                timestamp: "Chapter 2: The Journey into the Unknown",
+                teacherGesture: "explaining",
+                spokenDialogue: `[excitedly] Venturing into the enchanted woods, the companions faced strange riddles and musical winds!`,
+                bubbleCaption: `Chapter 2: The Quest Continues`,
+                whiteboardContent: {
+                  heading: `⚔️ Chapter 2: The Path of Wonders`,
+                  bulletPoints: [
+                    "🌲 Ancient bioluminescent trees lit the winding mountain pass",
+                    "🦊 Loyal allies joined the quest with ancient maps and witty humor",
+                    "💫 Every step brought them closer to the heart of the mystery"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`fantasy adventurers traveling down magical glowing trail for ${topic}, fairytale art, no text`)}?width=800&height=600&nologo=true`,
+                  imageCaption: `The companions march down the trail`
+                }
+              },
+              {
+                timestamp: "Chapter 3: The Great Obstacle",
+                teacherGesture: "pointing_whiteboard",
+                spokenDialogue: `[pauses dramatically] Suddenly, a roaring crystal river barred their way! Only the cleverest riddle could reveal the bridge!`,
+                bubbleCaption: `Chapter 3: The Great Obstacle`,
+                whiteboardContent: {
+                  heading: `🌊 Chapter 3: The Whispering Gorge`,
+                  bulletPoints: [
+                    "🗿 A mighty stone guardian demanded the answer to an ancient riddle",
+                    "💡 With quick wit and teamwork, the puzzle was solved",
+                    "🌈 A luminous bridge of starlight appeared across the canyon!"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`crystal river magical glowing bridge fantasy art for ${topic}, fairytale, no text`)}?width=800&height=600&nologo=true`,
+                  imageCaption: `A bridge of starlight forms across the gorge`
+                }
+              },
+              {
+                timestamp: "Chapter 4: The Climax & Triumph",
+                teacherGesture: "writing",
+                spokenDialogue: `[warmly and triumphantly] Stepping into the sanctum, the true wonder of ${topic} was revealed in radiant splendor!`,
+                bubbleCaption: `Chapter 4: The Heart of the Quest`,
+                whiteboardContent: {
+                  heading: `💎 Chapter 4: The Radiant Discovery`,
+                  bulletPoints: [
+                    `🌟 The magical wonder of ${topic} glowed with warm golden light`,
+                    "🤝 Courage and friendship proved stronger than any trial",
+                    "📜 The kingdom was saved from the encroaching shadows!"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`radiant crystal sanctuary magical triumph fantasy art for ${topic}, no text`)}?width=800&height=600&nologo=true`,
+                  imageCaption: `The treasure is revealed in the sanctum`
+                }
+              },
+              {
+                timestamp: "Chapter 5: The Grand Celebration",
+                teacherGesture: "celebrating",
+                spokenDialogue: `[laughs with joy] Fireworks and lanterns filled the starry night sky as the whole realm celebrated their incredible triumph!`,
+                bubbleCaption: `Chapter 5: The Grand Celebration`,
+                whiteboardContent: {
+                  heading: `🎉 Chapter 5: The Grand Celebration`,
+                  bulletPoints: [
+                    "🎆 Golden lanterns and joyful songs echoed through the night",
+                    "👑 Songs of this heroic journey will be sung for generations",
+                    "⭐ And they lived adventurously ever after!"
+                  ],
+                  diagramType: "none",
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(`fantasy kingdom celebration festival lanterns fireworks night for ${topic}, vibrant art, no text`)}?width=800&height=600&nologo=true`,
+                  imageCaption: `A grand festival celebration under the stars`
+                }
+              }
+            ];
           }
-        ];
+        } else {
+          fallbackTimeline = [
+            {
+              timestamp: "Slide 1: Foundations & Hook",
+              teacherGesture: "thinking",
+              spokenDialogue: `Welcome to our study of ${topic} for ${classLevel}. Let us break down the foundational principles right here on the blackboard.`,
+              bubbleCaption: `Core Foundations of ${topic}`,
+              whiteboardContent: {
+                heading: `${topic}: Core Foundations`,
+                bulletPoints: [
+                  `**Core Definition**: Essential definition and purpose of ${topic}`,
+                  `**Key Components**: Critical interacting elements designed for ${classLevel}`,
+                  "**Importance**: Why this concept is fundamental to master"
+                ],
+                diagramType: "none",
+                ...(hasVisualDiagrams ? {
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(topic + " scientific diagram textbook style clean white background")}?width=800&height=600&nologo=true`,
+                  imageCaption: `Foundations of ${topic}`
+                } : {})
+              }
+            },
+            {
+              timestamp: "Slide 2: Step-by-Step Mechanism",
+              teacherGesture: "writing",
+              spokenDialogue: `Looking deeper at the mechanics of ${topic}, observe how each component directly dictates the outcome.`,
+              bubbleCaption: `Deep Dive into ${topic}`,
+              whiteboardContent: {
+                heading: "Step-by-Step Mechanisms",
+                bulletPoints: [
+                  "**Governing Rule**: Primary scientific law or formula in action",
+                  "**State Transitions**: Critical boundary conditions and changes",
+                  "**Common Nuance**: High-yield distinctions to remember"
+                ],
+                diagramType: "none",
+                mathEquation: "$$\\Delta E = mc^2 \\quad \\text{or} \\quad F = ma$$",
+                ...(hasVisualDiagrams ? {
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(topic + " structure mechanism diagram white background")}?width=800&height=600&nologo=true`,
+                  imageCaption: `Mechanisms of ${topic}`
+                } : {})
+              }
+            },
+            {
+              timestamp: "Slide 3: Real-World Demonstration",
+              teacherGesture: "pointing_whiteboard",
+              spokenDialogue: `Notice how ${topic} manifests in technology, nature, and everyday life. Here is the concrete proof.`,
+              bubbleCaption: `Real-World Application of ${topic}`,
+              whiteboardContent: {
+                heading: "Real-World Demonstrations & Cases",
+                bulletPoints: [
+                  "**Industrial Application**: Practical modern applications and breakthroughs",
+                  "**Observable Phenomena**: Where we see this in everyday environments",
+                  "**Case Study**: Real-world experimental evidence"
+                ],
+                diagramType: "none",
+                ...(hasVisualDiagrams ? {
+                  imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(topic + " real world experiment diagram white background")}?width=800&height=600&nologo=true`,
+                  imageCaption: `Real-world application of ${topic}`
+                } : {})
+              }
+            },
+            {
+              timestamp: "Slide 4: Common Pitfalls & Exam Tips",
+              teacherGesture: "celebrating",
+              spokenDialogue: `To ace this topic, remember these critical exam takeaways and common mistakes students make.`,
+              bubbleCaption: `Master Summary for ${topic}`,
+              whiteboardContent: {
+                heading: "Pro-Tips & Master Summary",
+                bulletPoints: [
+                  "**High-Yield Takeaway**: Always verify fundamental assumptions first",
+                  "**Frequent Trap**: Avoid confusing symptoms with root causes",
+                  "**Golden Rule**: Be ready to state the governing mechanism clearly"
+                ],
+                diagramType: "none"
+              }
+            }
+          ];
+        }
 
         await Promise.all(fallbackTimeline.map(async (slide: any) => {
           const text = slide.spokenDialogue || slide.bubbleCaption;

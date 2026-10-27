@@ -17,6 +17,7 @@ import { AiQuizGame } from './AiQuizGame';
 import { useAuth } from '../firebase/authContext';
 import { QuizQuestion } from '../types';
 import { getAudioContext, unlockAudio, smoothAudioBuffer } from './audioManager';
+import { storytellerBgm } from './storyBgmManager';
 
 // Official valid Gemini voices: 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
 const languageMap: Record<string, { lang: string, voice: string }> = {
@@ -237,9 +238,9 @@ const Blackboard2D = ({
         )}
 
         {/* Content Area: Side-by-side on desktop/landscape with zero overlap */}
-        <div className="flex-1 flex flex-col md:flex-row gap-2 md:gap-4 min-h-0">
+        <div className="flex-1 flex flex-col landscape:flex-row md:flex-row gap-1.5 sm:gap-2 md:gap-4 min-h-0">
           {/* Bullets / Story beats list */}
-          <div className={`flex-1 flex flex-col justify-start gap-1 sm:gap-1.5 landscape:gap-1 overflow-y-auto pr-1 sm:pr-2 pb-16 sm:pb-20 landscape:pb-14 custom-chalk-scrollbar ${shouldShowImage ? 'w-full md:w-7/12' : 'w-full'}`}>
+          <div className={`flex-1 flex flex-col justify-start gap-1 sm:gap-1.5 landscape:gap-0.5 overflow-y-auto pr-1 sm:pr-2 pb-16 sm:pb-20 landscape:pb-4 custom-chalk-scrollbar ${shouldShowImage ? 'w-full landscape:w-7/12 md:w-7/12' : 'w-full'}`}>
             <AnimatePresence mode="popLayout">
               {visibleBullets.map((b: string, i: number) => {
                 const isActive = activeLineIndex === -1 ? false : i === activeLineIndex;
@@ -314,13 +315,13 @@ const Blackboard2D = ({
               initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.45 }}
-              className="w-full md:w-5/12 h-52 sm:h-64 md:h-full flex flex-col items-center justify-center p-1 sm:p-2 shrink-0 relative group min-h-0"
+              className="w-full landscape:w-5/12 md:w-5/12 h-44 sm:h-64 landscape:h-full md:h-full flex flex-col items-center justify-center p-0.5 sm:p-2 shrink-0 relative group min-h-0"
             >
               <div className={`relative w-full h-full flex flex-col items-center justify-center ${
                 isStoryteller 
                   ? 'bg-purple-950/70 border-2 border-amber-400/40 shadow-[0_8px_30px_rgba(0,0,0,0.8)]' 
                   : 'bg-slate-950/60 border border-white/20 shadow-2xl'
-              } rounded-xl p-1.5 sm:p-2 overflow-hidden`}>
+              } rounded-xl p-1 landscape:p-1 sm:p-2 overflow-hidden`}>
                 <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden rounded-lg">
                   <img 
                     src={displayImage} 
@@ -507,24 +508,19 @@ export function LiveClassroom({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // Mobile landscape prompt: brief, non-blocking toast, auto-dismisses in ~3.4s, avoids repeating in same classroom session
-  const hasShownLandscapeTipRef = useRef(false);
+  // Mobile portrait orientation check: notifies users in portrait mode to rotate to landscape
   useEffect(() => {
     if (isPreClass) return;
     const checkPortraitTip = () => {
-      if (hasShownLandscapeTipRef.current) return;
       const isPortrait = (window.innerHeight > window.innerWidth) || 
         (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(orientation: portrait)').matches);
       const isMobile = window.innerWidth <= 900;
       if (isPortrait && isMobile) {
-        hasShownLandscapeTipRef.current = true;
+        setIsPortraitMode(true);
         setShowLandscapeTip(true);
-        const timer = setTimeout(() => {
-          if (isMountedRef.current) {
-            setShowLandscapeTip(false);
-          }
-        }, 3400);
-        return () => clearTimeout(timer);
+      } else {
+        setIsPortraitMode(false);
+        setShowLandscapeTip(false);
       }
     };
 
@@ -536,6 +532,19 @@ export function LiveClassroom({
       window.removeEventListener('orientationchange', checkPortraitTip);
     };
   }, [isPreClass]);
+
+  // Storyteller background music: strictly active only in Storyteller persona and when not in preclass
+  useEffect(() => {
+    if (isStoryteller && !isPreClass) {
+      storytellerBgm.start();
+    } else {
+      storytellerBgm.stop();
+    }
+
+    return () => {
+      storytellerBgm.stop();
+    };
+  }, [isStoryteller, isPreClass]);
 
   // Global mount/unmount audio killer & 100% Ad-Free Classroom guarantee
   useEffect(() => {
@@ -1469,6 +1478,38 @@ export function LiveClassroom({
             </div>
             
             <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
+              {/* Storyteller Background Music Toggle (Active strictly in Storyteller persona) */}
+              {isStoryteller && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const unmuted = storytellerBgm.toggleMute();
+                    setIsStoryBgmActive(unmuted);
+                  }}
+                  className={`px-2 sm:px-2.5 py-0.5 sm:py-1 landscape:py-0.5 rounded-full text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 shadow-sm shrink-0 ${
+                    isStoryBgmActive 
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-400/50 hover:bg-amber-500/30 ring-1 ring-amber-400/30' 
+                      : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                  }`}
+                  title={isStoryBgmActive ? "Story Music Playing (Low Volume) - Click to Mute" : "Story Music Muted - Click to Play"}
+                >
+                  <span>{isStoryBgmActive ? "🎵 Music: On" : "🔇 Music: Off"}</span>
+                </button>
+              )}
+
+              {/* Portrait mode screen rotation helper button */}
+              {isPortraitMode && (
+                <button
+                  type="button"
+                  onClick={() => setShowLandscapeTip(prev => !prev)}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-400/40 flex items-center gap-1 shrink-0 hover:bg-cyan-900/80 transition-colors"
+                  title="Rotate your screen for the best experience"
+                >
+                  <RotateCcw className="w-3 h-3 text-cyan-400 animate-spin [animation-duration:4s]" />
+                  <span className="hidden xs:inline">Rotate screen</span>
+                </button>
+              )}
+
               {/* Fullscreen Toggle Button */}
               <button
                 onClick={toggleFullScreen}
@@ -1490,7 +1531,7 @@ export function LiveClassroom({
             </div>
           </header>
 
-          {/* Mobile Landscape Tip: Subtle, non-blocking toast, auto-dismisses after 3.4s */}
+          {/* Mobile Landscape Tip: Clear, helpful toast when user takes lesson in portrait mode */}
           <AnimatePresence>
             {showLandscapeTip && (
               <motion.div
@@ -1500,13 +1541,13 @@ export function LiveClassroom({
                 transition={{ duration: 0.25 }}
                 className="fixed top-12 sm:top-14 inset-x-0 mx-auto max-w-sm px-3 z-[120] pointer-events-none flex justify-center"
               >
-                <div className="pointer-events-auto bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-cyan-400/70 text-cyan-200 shadow-[0_10px_35px_rgba(0,0,0,0.85)] ring-1 ring-cyan-400/30 backdrop-blur-2xl rounded-full px-3.5 py-1.5 flex items-center gap-2 text-xs font-semibold">
+                <div className="pointer-events-auto bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-cyan-400/80 text-cyan-200 shadow-[0_10px_35px_rgba(0,0,0,0.85)] ring-2 ring-cyan-400/30 backdrop-blur-2xl rounded-full px-3.5 py-1.5 flex items-center gap-2 text-xs font-semibold">
                   <RotateCcw className="w-3.5 h-3.5 text-cyan-400 shrink-0 animate-spin [animation-duration:3s]" />
-                  <span>Tip: Try landscape mode for a better learning experience!</span>
+                  <span>Rotate your screen to landscape for the best experience!</span>
                   <button
                     type="button"
                     onClick={() => setShowLandscapeTip(false)}
-                    className="ml-1 text-slate-400 hover:text-white p-0.5 rounded-full"
+                    className="ml-1 text-slate-400 hover:text-white p-0.5 rounded-full transition-colors"
                     title="Dismiss"
                   >
                     <X className="w-3 h-3" />
@@ -1676,7 +1717,7 @@ export function LiveClassroom({
                 }
                 submitQuestion(e);
               }} 
-              className="flex-1 min-w-[90px] max-w-xs sm:max-w-md relative flex items-center mx-1 sm:mx-1.5"
+              className="flex-1 min-w-[60px] xs:min-w-[80px] max-w-xs sm:max-w-md relative flex items-center mx-0.5 sm:mx-1.5"
             >
               <input 
                 type="text"
@@ -1707,7 +1748,7 @@ export function LiveClassroom({
                   }
                   setAskText(e.target.value);
                 }}
-                placeholder={isStoryteller ? "Ask about the story or characters..." : "Ask doubt about slide..."}
+                placeholder={isStoryteller ? "Ask about the story..." : "Ask doubt about slide..."}
                 disabled={isAnsweringDoubt}
                 className="w-full h-7 sm:h-8 landscape:h-7 bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-full pl-2.5 pr-7 text-xs text-white placeholder-slate-400 focus:outline-none transition-all shadow-inner disabled:opacity-50"
               />
@@ -1800,7 +1841,8 @@ export function LiveClassroom({
                     title="Lesson complete! Take assessment questions related to this lesson"
                   >
                     <Award className="w-3.5 h-3.5 fill-current text-indigo-950" />
-                    <span className="tracking-wide">Quiz ({quizQuestions.length > 0 ? quizQuestions.length : '3–5'})</span>
+                    <span className="tracking-wide">Quiz</span>
+                    {quizQuestions.length > 0 && <span className="text-[10px] opacity-90 hidden xs:inline">({quizQuestions.length})</span>}
                     <ChevronRight className="w-3.5 h-3.5 stroke-[3]" />
                   </motion.button>
                 </div>

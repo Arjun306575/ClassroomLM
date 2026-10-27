@@ -96,8 +96,10 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = '
     } catch (err: any) {
       console.error(err);
       let msg = err?.message || 'Authentication failed.';
-      if (msg.includes('user-not-found') || msg.includes('wrong-password') || msg.includes('invalid-credential')) {
-        msg = 'Invalid username or password. Please verify your credentials.';
+      if (msg.includes('user-not-found') || msg.includes('USER_NOT_FOUND') || msg.includes('No account found')) {
+        msg = 'No account found with this username or email. Please check your spelling or sign up.';
+      } else if (msg.includes('wrong-password') || msg.includes('WRONG_PASSWORD') || msg.includes('Incorrect password')) {
+        msg = 'Incorrect password. Please double-check your password and try again.';
       } else if (msg.includes('email-already-in-use') || msg.includes('already exists') || msg.includes('already in use')) {
         msg = 'This username or email is already registered. Please choose another username or sign in.';
       } else if (msg.includes('weak-password')) {
@@ -394,10 +396,15 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = '
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={e => {
+                      setPassword(e.target.value);
+                      if (error) setError(null);
+                    }}
                     placeholder="••••••••"
                     className={`w-full pl-9 pr-9 py-2 rounded-xl border text-xs sm:text-sm font-medium transition-all ${
-                      isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500'
+                      error && error.includes("Incorrect password")
+                        ? 'border-red-500 bg-red-500/10 text-red-500 focus:border-red-500 ring-2 ring-red-500/20'
+                        : isDarkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500'
                     }`}
                   />
                   <button
@@ -434,9 +441,23 @@ export function AuthModal({ isOpen, onClose, reason, isDarkMode, initialMode = '
               </div>
 
               {error && (
-                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-semibold flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-semibold flex flex-col gap-1.5">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="flex-1 leading-snug">{error}</span>
+                  </div>
+                  {error.includes("No account found") && mode === 'signin' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('signup');
+                        setError(null);
+                      }}
+                      className="self-start text-[11px] font-bold text-blue-500 hover:text-blue-400 underline cursor-pointer ml-6"
+                    >
+                      Click here to create a new account with this username →
+                    </button>
+                  )}
                 </div>
               )}
 

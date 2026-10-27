@@ -453,12 +453,21 @@ async function generateContentWithRetry(
  */
 async function fetchInternetImageForSlide(searchKeyword: string, topic: string, isStoryteller: boolean = false): Promise<string | null> {
   const query = (searchKeyword || topic || "").trim();
-  if (!query) return null;
+  if (!query && !topic) return null;
 
-  // In Storyteller mode, generate whimsical, vibrant, colorful storybook adventure digital art
+  // In Storyteller mode, generate whimsical, vibrant, colorful storybook adventure digital art anchored to the story topic
   if (isStoryteller) {
     try {
-      const storyPrompt = `whimsical colorful storybook adventure illustration of ${query || topic}, vibrant fairy tale fantasy digital art, beautiful cinematic magical lighting, animated movie style, detailed painting, high fantasy, colorful characters, storybook page art, no text, no watermark`;
+      const cleanTopic = (topic || "fairytale adventure").trim();
+      let cleanKeyword = (searchKeyword || "").trim();
+      // Remove generic non-story keywords if present
+      cleanKeyword = cleanKeyword
+        .replace(/^(slide|chapter)\s*\d+[:\-]?\s*/i, "")
+        .replace(/step-by-step mechanism|foundations|exam tips|deep dive|real-world demonstration/gi, "")
+        .trim();
+
+      const subject = cleanKeyword ? `${cleanTopic}, ${cleanKeyword}` : cleanTopic;
+      const storyPrompt = `whimsical colorful storybook adventure illustration of ${subject}, fairy tale fantasy digital art, beautiful cinematic magical lighting, animated movie style, detailed painting, high fantasy, colorful characters, storybook page art, no text, no watermark`;
       return `https://image.pollinations.ai/prompt/${encodeURIComponent(storyPrompt)}?width=800&height=600&nologo=true`;
     } catch (e) {
       return null;
@@ -607,12 +616,18 @@ app.post("/api/auth/signin", async (req, res) => {
     );
 
     if (!user) {
-      return res.status(401).json({ error: "Invalid username or password. Please verify your credentials." });
+      return res.status(401).json({ 
+        error: "No account found with this username or email. Please check your spelling or sign up.",
+        errorCode: "USER_NOT_FOUND"
+      });
     }
 
     const calculatedHash = crypto.scryptSync(password, user.salt, 64).toString("hex");
     if (calculatedHash !== user.passwordHash) {
-      return res.status(401).json({ error: "Invalid username or password. Please verify your credentials." });
+      return res.status(401).json({ 
+        error: "Incorrect password. Please double-check your password and try again.",
+        errorCode: "WRONG_PASSWORD"
+      });
     }
 
     const token = createManualToken({ uid: user.uid, email: user.email, displayName: user.displayName });
@@ -797,9 +812,9 @@ You are an enthralling, fun, creative Storyteller. Transform the topic "${effect
       personaGuidance = `Embody the persona: "${persona}". Adjust your teaching tone, demeanor, vocabulary, and delivery style to match this persona authentically.`;
     }
 
-    // Focus area characteristics
+    // Focus area characteristics: strictly disabled in Storyteller mode
     let focusGuidance = "";
-    if (focusList.length > 0) {
+    if (focusList.length > 0 && !isStoryteller) {
       focusGuidance = `\nFOCUS AREAS TO EMPHASIZE:\n${focusList.map((f: string) => `- ${f}`).join("\n")}\n`;
       if (focusList.includes("Step-by-step Math")) {
         focusGuidance += "• Show explicit step-by-step mathematical calculations, derivations, or algebraic steps on the whiteboard using 'mathEquation' and clear line-by-line formulas.\n";
@@ -833,14 +848,29 @@ Generate a sequential deck of 5 to 7 distinct, progressive blackboard slides:
 - Slide 5: Common Traps, Misconceptions & High-Yield Tips (What students stumble on and how to ace it)
 - Slide 6: Comprehensive Master Summary & Key Takeaways (Crisp summary of main takeaways)`;
 
-    let promptText = `You are an expert virtual classroom teacher designed for an immersive full-screen 2D interactive blackboard experience.
+    let promptText = (isStoryteller ? `You are a master fairytale, myth, and adventure Storyteller for an immersive full-screen 2D storytelling board experience.
+Your mission is to tell a captivating, imaginative, entertaining adventure story about "${effectiveTopic}" in the requested language: "${language}".
+
+STRICT NEGATIVE CONSTRAINTS (ZERO TOLERANCE):
+- ZERO formulas, ZERO math equations, ZERO scientific derivations, and ZERO physics/chemistry mechanisms.
+- ZERO educational lectures, syllabus concepts, textbook definitions, or exam tips.
+- Do NOT talk or teach like a school teacher. Do NOT lecture the student.
+- You are recounting pure storytelling, magical lore, humorous dialogue, and heroic adventures!
+- Every single blackboard slide MUST be a colorful story chapter (e.g. "📖 Chapter 1: Straw & The Miller's Boast", "✨ Chapter 2: The Mysterious Visitor").
+- Every single bullet point MUST be a vivid story event or character dialogue moment starting with a fun emoji (🌟, 👑, 🚪, 🌾, 🪙, 🔥, 🎉).
+- "whiteboardContent.mathEquation" MUST be omitted or null.
+- "whiteboardContent.diagramType" MUST be "none".
+
+STORYTELLER PERSONA:
+${personaGuidance}
+` : `You are an expert virtual classroom teacher designed for an immersive full-screen 2D interactive blackboard experience.
 Your goal is to transform the student's request into a creative, animated, highly engaging multi-slide blackboard lesson for a student at the ${gradeLevel} level.
 The entire lesson, spoken dialogue, whiteboard notes, and quiz MUST be presented in the requested language: "${language}".
 
 TEACHER PERSONA:
 ${personaGuidance}
 ${focusGuidance}
-
+`) + `
 LANGUAGE MANDATE:
 The selected language is: "${language}".
 Every single part of the lesson MUST be generated in "${language}":
@@ -976,7 +1006,9 @@ Respond strictly with valid JSON matching the schema.`;
         config: {
           responseMimeType: "application/json",
           responseSchema: generateLessonSchema,
-          systemInstruction: `You are an expert virtual school teacher designed for interactive blackboard teaching. Persona: ${persona}. Language: ${language}. Always dive straight into engaging content without generic filler greetings.`,
+          systemInstruction: isStoryteller
+            ? `You are an enthralling, whimsical fairytale, myth, and adventure Storyteller. Language: ${language}. STRICT MANDATE: Pure creative storytelling with vibrant characters, dramatic suspense, humor, and dialogue. ZERO math, ZERO science mechanisms, ZERO school curriculum, ZERO equations.`
+            : `You are an expert virtual school teacher designed for interactive blackboard teaching. Persona: ${persona}. Language: ${language}. Always dive straight into engaging content without generic filler greetings.`,
           temperature: 0.7
         }
       }, ["gemini-3.8-flash", "gemini-flash-latest"]);
@@ -986,7 +1018,128 @@ Respond strictly with valid JSON matching the schema.`;
     } catch (modelErr: any) {
       console.warn("AI generation encountered issue, constructing tailored curriculum slides:", modelErr?.message || modelErr);
       if (isStoryteller) {
-        parsedData = {
+        const isRumpel = effectiveTopic.toLowerCase().includes("rumpel");
+        parsedData = isRumpel ? {
+          title: "The Tale of Rumpelstiltskin",
+          description: `The Classic Fairytale Adventure | Storyteller Persona | ${language}`,
+          timeline: [
+            {
+              timestamp: "Chapter 1: The Miller's Boast",
+              teacherGesture: "thinking",
+              spokenDialogue: `[whispers mysteriously] Once upon a time, a foolish miller bragged to the King that his daughter could spin ordinary yellow straw into pure gleaming gold! The greedy King locked her in a cold tower piled to the ceiling with straw.`,
+              bubbleCaption: "Chapter 1: The Miller's Boast & The Tower of Straw",
+              translationText: "Chapter 1: The Miller's Boast & The Tower of Straw",
+              whiteboardContent: {
+                heading: "🌾 Chapter 1: The Boast & The Tower of Straw",
+                bulletPoints: [
+                  "🗣️ A boastful miller claimed his clever daughter could spin straw into pure gold",
+                  "🏰 The greedy King locked the terrified girl inside a stone castle tower",
+                  "😢 Weeping in the shadows, she had no idea how to perform such magic!"
+                ],
+                diagramType: "none",
+                imageKeyword: "Rumpelstiltskin fairytale illustration, miller's daughter crying in castle tower surrounded by piles of straw, magical fantasy storybook art",
+                imageCaption: "The miller's daughter locked in the castle tower"
+              }
+            },
+            {
+              timestamp: "Chapter 2: The Mysterious Visitor",
+              teacherGesture: "explaining",
+              spokenDialogue: `[excitedly] Creak! The tower door swung open, and in hopped a tiny, strange man with a mischievous grin! 'What will you give me,' he cackled, 'if I spin this straw into gold for you?'`,
+              bubbleCaption: "Chapter 2: The Mysterious Visitor & The Spinning Wheel",
+              translationText: "Chapter 2: The Mysterious Visitor & The Spinning Wheel",
+              whiteboardContent: {
+                heading: "✨ Chapter 2: The Little Imp & The Spinning Wheel",
+                bulletPoints: [
+                  "🚪 The heavy door creaked open, revealing a quirky little man in a pointed hat",
+                  "📿 'Give me your necklace,' he demanded, 'and I shall spin every strand into gold!'",
+                  "🧵 Whirr! Round and round went the wheel—by sunrise, the room sparkled with golden thread!"
+                ],
+                diagramType: "none",
+                imageKeyword: "Rumpelstiltskin imp spinning golden straw into gold at wooden spinning wheel in stone castle, fairytale fantasy art",
+                imageCaption: "The imp spins straw into glittering gold"
+              }
+            },
+            {
+              timestamp: "Chapter 3: The Fatal Bargain",
+              teacherGesture: "writing",
+              spokenDialogue: `[pauses with dramatic suspense] For three nights the imp spun mountains of gold! But on the third night, having nothing left to give, the weeping maiden promised her firstborn child once she became Queen!`,
+              bubbleCaption: "Chapter 3: The Fatal Bargain",
+              translationText: "Chapter 3: The Fatal Bargain",
+              whiteboardContent: {
+                heading: "👑 Chapter 3: The Fatal Bargain",
+                bulletPoints: [
+                  "🪙 Night after night, the King demanded more mountains of shining gold",
+                  "💍 Having no more jewels to offer, the maiden promised the imp her firstborn child",
+                  "👑 The King married the girl in a grand royal wedding, and a sweet baby was born"
+                ],
+                diagramType: "none",
+                imageKeyword: "fairytale royal wedding and queen in castle with newborn baby, magical storybook art",
+                imageCaption: "The new Queen and her royal newborn"
+              }
+            },
+            {
+              timestamp: "Chapter 4: The Fire in the Forest",
+              teacherGesture: "pointing_whiteboard",
+              spokenDialogue: `[with hushed suspense] When the imp returned to claim the baby, the Queen begged for mercy. 'I give you three days!' he squeaked. 'Guess my name, or the child is mine!' On the third night, a messenger discovered a roaring fire deep in the dark woods!`,
+              bubbleCaption: "Chapter 4: The Secret Midnight Fire",
+              translationText: "Chapter 4: The Secret Midnight Fire",
+              whiteboardContent: {
+                heading: "🔥 Chapter 4: The Secret Fire in the Woods",
+                bulletPoints: [
+                  "⏳ 'I give you three days! Guess my name, or the child is mine!' sneered the imp",
+                  "📜 Royal messengers rode to every corner of the kingdom collecting strange names",
+                  "🌲 On the third midnight, a messenger spotted a roaring campfire in the deep dark forest"
+                ],
+                diagramType: "none",
+                imageKeyword: "Rumpelstiltskin dancing around a roaring campfire in dark enchanted forest full moon, magical fairytale storybook painting",
+                imageCaption: "A campfire burns deep in the dark forest"
+              }
+            },
+            {
+              timestamp: "Chapter 5: Rumpelstiltskin is My Name!",
+              teacherGesture: "celebrating",
+              spokenDialogue: `[laughs triumphantly] Dancing wildly around the fire on one foot, the imp sang: 'Today I brew, tomorrow I bake, the Queen's own child I take! For nobody knows, and nobody will win, that my name is RUMPELSTILTSKIN!' When the Queen spoke his true name, he stomped his foot and vanished forever!`,
+              bubbleCaption: "Chapter 5: The Secret Name is Revealed!",
+              translationText: "Chapter 5: The Secret Name is Revealed!",
+              whiteboardContent: {
+                heading: "🎉 Chapter 5: The Secret Name is Revealed!",
+                bulletPoints: [
+                  "🔥 The imp leaped over flames singing: 'My name is RUMPELSTILTSKIN!'",
+                  "👑 The messenger galloped back and whispered the secret into the Queen's ear",
+                  "⚡ 'Is your name Rumpelstiltskin?!' cried the Queen—and the furious imp vanished forever!"
+                ],
+                diagramType: "none",
+                imageKeyword: "Rumpelstiltskin stomping foot in palace throne room Queen holding baby cheering royal court, vibrant fairytale illustration",
+                imageCaption: "The Queen discovers the secret name"
+              }
+            }
+          ],
+          quiz: [
+            {
+              question: "What did the miller boast his daughter could spin into gold?",
+              options: ["Ordinary yellow straw", "Cotton and wool", "Cobwebs from the attic", "Silver coins"],
+              correctIndex: 0,
+              explanation: "The foolish miller claimed his daughter could spin ordinary straw into pure gold!"
+            },
+            {
+              question: "What riddle condition did the imp give the Queen to keep her child?",
+              options: ["Guess his true name in three days", "Find a golden four-leaf clover", "Build a second castle", "Count every star in the sky"],
+              correctIndex: 0,
+              explanation: "He gave her three days to guess his true name!"
+            },
+            {
+              question: "How did the messenger discover the imp's secret name?",
+              options: [
+                "He saw the imp singing his name around a midnight forest fire",
+                "He found it written in an ancient royal book",
+                "The miller remembered it from long ago",
+                "The baby whispered it"
+              ],
+              correctIndex: 0,
+              explanation: "The messenger saw the imp dancing around a campfire in the woods singing: 'My name is Rumpelstiltskin!'"
+            }
+          ]
+        } : {
           title: `The Grand Adventure of ${effectiveTopic}`,
           description: `An exciting story adventure | Storyteller Persona | ${language}`,
           timeline: [
@@ -1281,14 +1434,47 @@ Respond strictly with valid JSON matching the schema.`;
         });
       }
 
-      // Hard strict guarantee: in Storyteller mode, zero formulas and every slide has a storybook picture
+      // Hard strict guarantee: in Storyteller mode, zero formulas, zero academic lectures, and every slide has a relevant storybook picture
       if (isStoryteller) {
+        const cleanTopicName = effectiveTopic || "Adventure Tale";
         parsedData.timeline.forEach((step: any, idx: number) => {
           if (step.whiteboardContent) {
             delete step.whiteboardContent.mathEquation;
             step.whiteboardContent.mathEquation = null;
+            step.whiteboardContent.diagramType = "none";
+            delete step.whiteboardContent.diagramLabels;
+
+            // Neutralize any residual textbook or formula heading
+            if (/mechanism|derivation|foundations|exam tips|scientific|equation|formula|pro-tips/i.test(step.whiteboardContent.heading || "")) {
+              const defaultChapterTitles = [
+                `📖 Chapter 1: The Legend of ${cleanTopicName}`,
+                `✨ Chapter 2: The Mysterious Visitor & The Quest`,
+                `🌊 Chapter 3: The Secret Path & Great Obstacle`,
+                `🔥 Chapter 4: The Midnight Discovery`,
+                `🎉 Chapter 5: The Grand Triumph & Celebration`
+              ];
+              step.whiteboardContent.heading = defaultChapterTitles[idx] || `📖 Chapter ${idx + 1}: The Adventure Continues`;
+            }
+
+            // Purge any bullet points that contain formulas, equations, or textbook references
+            if (Array.isArray(step.whiteboardContent.bulletPoints)) {
+              step.whiteboardContent.bulletPoints = step.whiteboardContent.bulletPoints
+                .filter((b: string) => !b.includes("$$") && !b.includes("\\Delta") && !b.includes("F = ma") && !/formula|equation|derivation|exam|syllabus/i.test(b))
+                .map((b: string) => {
+                  const cleaned = b.replace(/step-by-step mechanism/gi, "exciting quest").replace(/scientific law/gi, "ancient lore");
+                  return /^[^\w\s]/.test(cleaned) ? cleaned : `✨ ${cleaned}`;
+                });
+              if (step.whiteboardContent.bulletPoints.length === 0) {
+                step.whiteboardContent.bulletPoints = [
+                  `🌟 The thrilling tale of ${cleanTopicName} unfolded with dramatic surprises`,
+                  `🧭 Every companion braved the perils together with courage and laughter`,
+                  `✨ A magical resolution echoed across the kingdom!`
+                ];
+              }
+            }
+
             if (!step.whiteboardContent.imageUrl) {
-              step.whiteboardContent.imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`vibrant fantasy storybook scene chapter ${idx + 1}, ${step.whiteboardContent.heading || effectiveTopic}, fairy tale animation style, beautiful lighting, no text`)}?width=800&height=600&nologo=true`;
+              step.whiteboardContent.imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`vibrant fantasy storybook scene of ${cleanTopicName}, chapter ${idx + 1}, ${step.whiteboardContent.heading || ''}, fairy tale animation style, beautiful lighting, no text`)}?width=800&height=600&nologo=true`;
             }
           }
         });
